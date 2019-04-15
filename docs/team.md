@@ -3,7 +3,7 @@ layout: default
 title:  Team
 ---
 
-# {{ page.title }}
+# The Dragon Slayers
 
 
 ## USER 1
