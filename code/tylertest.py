@@ -38,9 +38,13 @@ def GetMissionXML():
                 <Name>CS175AwesomeMazeBot</Name>
                 <AgentStart>
                     <Placement x="0.5" y="56.0" z="0.5" yaw="0"/>
+                    <Inventory>
+                        <InventoryItem slot="0" type="bow"/>
+                        <InventoryItem slot="1" type="arrow" quantity="64"/>
+                    </Inventory>
                 </AgentStart>
                 <AgentHandlers>
-                    <DiscreteMovementCommands/>
+                    <ContinuousMovementCommands turnSpeedDegs="180"/>
                     <AgentQuitFromTouchingBlockType>
                         <Block type="redstone_block"/>
                     </AgentQuitFromTouchingBlockType>
@@ -86,54 +90,58 @@ if agent_host.receivedArgument("help"):
     print(agent_host.getUsage())
     exit(0)
 
-if agent_host.receivedArgument("test"):
-    num_repeats = 1
-else:
-    num_repeats = 10
+my_mission = MalmoPython.MissionSpec(GetMissionXML(), True)
+my_mission_record = MalmoPython.MissionRecordSpec()
+my_mission.requestVideo(800, 500)
+my_mission.setViewpoint(1)
+# Attempt to start a mission:
+max_retries = 3
+my_clients = MalmoPython.ClientPool()
+my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10000)) # add Minecraft machines here as available
 
-for i in range(num_repeats):
-    my_mission = MalmoPython.MissionSpec(GetMissionXML(), True)
-    my_mission_record = MalmoPython.MissionRecordSpec()
-    my_mission.requestVideo(800, 500)
-    my_mission.setViewpoint(1)
-    # Attempt to start a mission:
-    max_retries = 3
-    my_clients = MalmoPython.ClientPool()
-    my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10000)) # add Minecraft machines here as available
+for retry in range(max_retries):
+    try:
+        agent_host.startMission( my_mission, my_clients, my_mission_record, 0, "%s-%d" % ('Moshe', i) )
+        break
+    except RuntimeError as e:
+        if retry == max_retries - 1:
+            print("Error starting mission", (i+1), ":",e)
+            exit(1)
+        else:
+            time.sleep(2)
 
-    for retry in range(max_retries):
-        try:
-            agent_host.startMission( my_mission, my_clients, my_mission_record, 0, "%s-%d" % ('Moshe', i) )
-            break
-        except RuntimeError as e:
-            if retry == max_retries - 1:
-                print("Error starting mission", (i+1), ":",e)
-                exit(1)
-            else:
-                time.sleep(2)
-
-    # Loop until mission starts:
-    print("Waiting for the mission", (i+1), "to start ",)
+# Loop until mission starts:
+print("Waiting for the mission", (i+1), "to start ",)
+world_state = agent_host.getWorldState()
+while not world_state.has_mission_begun:
+    #sys.stdout.write(".")
+    time.sleep(0.1)
     world_state = agent_host.getWorldState()
-    while not world_state.has_mission_begun:
-        #sys.stdout.write(".")
-        time.sleep(0.1)
-        world_state = agent_host.getWorldState()
-        for error in world_state.errors:
-            print("Error:",error.text)
+    for error in world_state.errors:
+        print("Error:",error.text)
 
-    print()
-    print("Mission", (i+1), "running.")
+print()
+print("Mission", (i+1), "running.")
 
-    grid = load_grid(world_state)
-    # Loop until mission ends:
-    while world_state.is_mission_running:
-        #sys.stdout.write(".")
-        time.sleep(0.1)
-        world_state = agent_host.getWorldState()
-        for error in world_state.errors:
-            print("Error:",error.text)
+agent_host.sendCommand("hotbar.1 1")
+agent_host.sendCommand("hotbar.1 0")
 
-    print()
-    print("Mission", (i+1), "ended")
-    # Mission has ended.
+agent_host.sendCommand("use 1")
+agent_host.sendCommand("pitch 0.1")
+time.sleep(1)
+agent_host.sendCommand("use 0")
+agent_host.sendCommand("pitch 0")
+
+# Loop until mission ends:
+while world_state.is_mission_running:
+    #sys.stdout.write(".")
+    time.sleep(0.1)
+    world_state = agent_host.getWorldState()
+    load_grid(world_state)
+    for error in world_state.errors:
+        print("Error:",error.text)
+
+
+print()
+print("Mission", (i+1), "ended")
+# Mission has ended.
