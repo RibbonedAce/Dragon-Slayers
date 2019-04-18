@@ -3,13 +3,15 @@ layout: default
 title:  Home
 ---
 
-Source code: https://github.com/USER/PROJECT (_fix this_)
+Source code: https://github.com/thetylerace13/Dragon-Slayers
 
 Reports:
 
 - [Proposal](proposal.html)
 - [Status](status.html)
 - [Final](final.html)
+
+///////
 
 What's Markdown (`.md`)?
 
@@ -35,6 +37,8 @@ $$x^2 = y^2$$
 
 Just getting started with Markdown?
 See the [HTML <-> Markdown Quick Reference (Cheat Sheet)][quickref].
-
-
 [quickref]: https://github.com/mundimark/quickrefs/blob/master/HTML.md
+
+///////
+
+<img src="https://www.minecraft.net/content/dam/archive/1a8822ce99d6200ab78e51db203180e5-Roman%20dragon2.jpg" width="858" height="480">
