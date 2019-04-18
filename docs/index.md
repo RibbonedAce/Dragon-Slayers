@@ -41,5 +41,5 @@ See the [HTML <-> Markdown Quick Reference (Cheat Sheet)][quickref].
 ///////
 
 ![alt text](https://www.minecraft.net/content/dam/archive/1a8822ce99d6200ab78e51db203180e5-Roman%20dragon2.jpg)
-
+<img src="https://www.minecraft.net/content/dam/archive/1a8822ce99d6200ab78e51db203180e5-Roman%20dragon2.jpg" width="858" height="480">
 [quickref]: https://github.com/mundimark/quickrefs/blob/master/HTML.md
