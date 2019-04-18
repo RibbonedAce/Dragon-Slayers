@@ -1,25 +1,3 @@
-# ------------------------------------------------------------------------------------------------
-# Copyright (c) 2016 Microsoft Corporation
-#
-# Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
-# associated documentation files (the "Software"), to deal in the Software without restriction,
-# including without limitation the rights to use, copy, modify, merge, publish, distribute,
-# sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-#
-# The above copyright notice and this permission notice shall be included in all copies or
-# substantial portions of the Software.
-#
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
-# NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
-# NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
-# DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-# ------------------------------------------------------------------------------------------------
-# Tyler Gemora, 31672308
-
-# Tutorial sample #7: The Maze Decorator
-
 try:
     from malmo import MalmoPython
 except:
@@ -29,11 +7,8 @@ import os
 import sys
 import time
 import json
-from priority_dict import priorityDictionary as PQ
 
-# sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)  # flush print output immediately
-
-def GetMissionXML(seed, gp, size=10):
+def GetMissionXML():
     return '''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
             <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
@@ -54,17 +29,6 @@ def GetMissionXML(seed, gp, size=10):
                   <DrawingDecorator>
                     <DrawSphere x="-27" y="70" z="0" radius="30" type="air"/>
                   </DrawingDecorator>
-                  <MazeDecorator>
-                    <Seed>'''+str(seed)+'''</Seed>
-                    <SizeAndPosition width="''' + str(size) + '''" length="''' + str(size) + '''" height="10" xOrigin="-32" yOrigin="69" zOrigin="-5"/>
-                    <StartBlock type="emerald_block" fixedToEdge="true"/>
-                    <EndBlock type="redstone_block" fixedToEdge="true"/>
-                    <PathBlock type="diamond_block"/>
-                    <FloorBlock type="air"/>
-                    <GapBlock type="air"/>
-                    <GapProbability>'''+str(gp)+'''</GapProbability>
-                    <AllowDiagonalMovement>false</AllowDiagonalMovement>
-                  </MazeDecorator>
                   <ServerQuitFromTimeUp timeLimitMs="10000"/>
                   <ServerQuitWhenAnyAgentFinishes/>
                 </ServerHandlers>
@@ -80,12 +44,9 @@ def GetMissionXML(seed, gp, size=10):
                     <AgentQuitFromTouchingBlockType>
                         <Block type="redstone_block"/>
                     </AgentQuitFromTouchingBlockType>
-                    <ObservationFromGrid>
-                      <Grid name="floorAll">
-                        <min x="-10" y="-1" z="-10"/>
-                        <max x="10" y="-1" z="10"/>
-                      </Grid>
-                  </ObservationFromGrid>
+                    <ObservationFromNearbyEntities> 
+                        <Range name="Mobs" xrange="10" yrange="1" zrange="10" update_frequency="20"/>
+                    </ObservationFromNearbyEntities>
                 </AgentHandlers>
               </AgentSection>
             </Mission>'''
@@ -110,112 +71,8 @@ def load_grid(world_state):
 
         if world_state.number_of_observations_since_last_state > 0:
             msg = world_state.observations[-1].text
-            observations = json.loads(msg)
-            grid = observations.get(u'floorAll', 0)
+            print(msg)
             break
-    return grid
-
-def find_start_end(grid):
-    """
-    Finds the source and destination block indexes from the list.
-
-    Args
-        grid:   <list>  the world grid blocks represented as a list of blocks (see Tutorial.pdf)
-
-    Returns
-        start: <int>   source block index in the list
-        end:   <int>   destination block index in the list
-    """
-    #------------------------------------
-    #
-    #   Fill and submit this code
-    #
-    return (grid.index("emerald_block"), grid.index("redstone_block"))
-    #-------------------------------------
-
-def extract_action_list_from_path(path_list):
-    """
-    Converts a block idx path to action list.
-
-    Args
-        path_list:  <list>  list of block idx from source block to dest block.
-
-    Returns
-        action_list: <list> list of string discrete action commands (e.g. ['movesouth 1', 'movewest 1', ...]
-    """
-    action_trans = {-21: 'movenorth 1', 21: 'movesouth 1', -1: 'movewest 1', 1: 'moveeast 1'}
-    alist = []
-    for i in range(len(path_list) - 1):
-        curr_block, next_block = path_list[i:(i + 2)]
-        alist.append(action_trans[next_block - curr_block])
-
-    return alist
-
-
-def dijkstra_shortest_path(grid_obs, source, dest):
-    """
-    Finds the shortest path from source to destination on the map. It used the grid observation as the graph.
-    See example on the Tutorial.pdf file for knowing which index should be north, south, west and east.
-
-    Args
-        grid_obs:   <list>  list of block types string representing the blocks on the map.
-        source:     <int>   source block index.
-        dest:       <int>   destination block index.
-
-    Returns
-        path_list:  <list>  block indexes representing a path from source (first element) to destination (last)
-    """
-    #------------------------------------
-    #
-    #   Fill and submit this code
-    #
-    int_obs = []
-    for s in grid_obs:
-        if s == "diamond_block" or s == "emerald_block" or s == "redstone_block":
-            int_obs.append(1)
-        else:
-            int_obs.append(0)
-            
-    def get_path_options(current):
-        result = []
-        index = current + 21
-        if index < 21*21 and int_obs[index] > 0:
-            result.append(index)
-        index = current + 1
-        if current % 21 < 20 and int_obs[index] > 0:
-            result.append(index)
-        index = current - 1
-        if current % 21 > 0 and int_obs[index] > 0:
-            result.append(index)
-        index = current - 21
-        if index >= 0 and int_obs[index] > 0:
-            result.append(index)
-        return result
-
-    priorities = PQ()
-    paths = {}
-    priorities[dest] = 9999
-    priorities[source] = 0
-    paths[source] = []
-
-    while True:
-        node = priorities.smallest()
-        if node == dest:
-            break
-
-        for step in get_path_options(node):
-            if not step in paths.keys() or len(paths[step]) > len(paths[node]) + 1:
-                priorities[step] = priorities[node] + 1
-                new_path = list(paths[node])
-                new_path.append(node)
-                paths[step] = new_path
-
-        priorities.pop(node, None)
-
-    result = paths[dest]
-    result.append(dest)
-    return result
-    #-------------------------------------
 
 # Create default Malmo objects:
 agent_host = MalmoPython.AgentHost()
@@ -235,9 +92,7 @@ else:
     num_repeats = 10
 
 for i in range(num_repeats):
-    size = int(6 + 0.5*i)
-    print("Size of maze:", size)
-    my_mission = MalmoPython.MissionSpec(GetMissionXML("0", 0.4 + float(i/20.0), size), True)
+    my_mission = MalmoPython.MissionSpec(GetMissionXML(), True)
     my_mission_record = MalmoPython.MissionRecordSpec()
     my_mission.requestVideo(800, 500)
     my_mission.setViewpoint(1)
@@ -271,29 +126,10 @@ for i in range(num_repeats):
     print("Mission", (i+1), "running.")
 
     grid = load_grid(world_state)
-    start, end = find_start_end(grid) # implement this
-    path = dijkstra_shortest_path(grid, start, end)  # implement this
-    action_list = extract_action_list_from_path(path)
-    print("Output (start,end)", (i+1), ":", (start,end))
-    print("Output (path length)", (i+1), ":", len(path))
-    print("Output (actions)", (i+1), ":", action_list)
     # Loop until mission ends:
-    action_index = 0
     while world_state.is_mission_running:
         #sys.stdout.write(".")
         time.sleep(0.1)
-
-        # Sending the next commend from the action list -- found using the Dijkstra algo.
-        if action_index >= len(action_list):
-            print("Error:", "out of actions, but mission has not ended!")
-            time.sleep(2)
-        else:
-            agent_host.sendCommand(action_list[action_index])
-        action_index += 1
-        if len(action_list) == action_index:
-            # Need to wait few seconds to let the world state realise I'm in end block.
-            # Another option could be just to add no move actions -- I thought sleep is more elegant.
-            time.sleep(2)
         world_state = agent_host.getWorldState()
         for error in world_state.errors:
             print("Error:",error.text)
