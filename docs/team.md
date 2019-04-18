@@ -6,11 +6,11 @@ title:  Team
 # The Dragon Slayers
 
 
-## USER 1
+## Tyler Gemora
 ***UCI Net ID***: tgemora
 
-## USER 2
+## Matthew Guerrero
 ***UCI Net ID***: maguerr3
 
-## USER 3
+## Kyle Wong
 ***UCI Net ID***: kyleaw1
