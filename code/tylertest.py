@@ -29,7 +29,7 @@ def GetMissionXML():
                   <DrawingDecorator>
                     <DrawSphere x="-27" y="70" z="0" radius="30" type="air"/>
                   </DrawingDecorator>
-                  <ServerQuitFromTimeUp timeLimitMs="10000"/>
+                  <ServerQuitFromTimeUp timeLimitMs="5000"/>
                   <ServerQuitWhenAnyAgentFinishes/>
                 </ServerHandlers>
               </ServerSection>
@@ -49,7 +49,7 @@ def GetMissionXML():
                         <Block type="redstone_block"/>
                     </AgentQuitFromTouchingBlockType>
                     <ObservationFromNearbyEntities> 
-                        <Range name="Mobs" xrange="10" yrange="1" zrange="10" update_frequency="20"/>
+                        <Range name="Mobs" xrange="10" yrange="1" zrange="10" update_frequency="1"/>
                     </ObservationFromNearbyEntities>
                 </AgentHandlers>
               </AgentSection>
@@ -57,15 +57,6 @@ def GetMissionXML():
 
 
 def load_grid(world_state):
-    """
-    Used the agent observation API to get a 21 X 21 grid box around the agent (the agent is in the middle).
-
-    Args
-        world_state:    <object>    current agent world state
-
-    Returns
-        grid:   <list>  the world grid blocks represented as a list of blocks (see Tutorial.pdf)
-    """
     while world_state.is_mission_running:
         #sys.stdout.write(".")
         time.sleep(0.1)
@@ -74,9 +65,15 @@ def load_grid(world_state):
             raise AssertionError('Could not load grid.')
 
         if world_state.number_of_observations_since_last_state > 0:
-            msg = world_state.observations[-1].text
-            print(msg)
-            break
+            return json.loads(world_state.observations[-1].text)
+
+def set_pitch(obs, degrees):
+    current_degrees = obs["Mobs"][0]["yaw"]
+    diff = degrees - current_degrees
+    if diff > 180:
+        diff = diff - 360
+    turn = diff / 190
+    agent_host.sendCommand("turn " + str(turn))
 
 # Create default Malmo objects:
 agent_host = MalmoPython.AgentHost()
@@ -93,7 +90,7 @@ if agent_host.receivedArgument("help"):
 my_mission = MalmoPython.MissionSpec(GetMissionXML(), True)
 my_mission_record = MalmoPython.MissionRecordSpec()
 my_mission.requestVideo(800, 500)
-my_mission.setViewpoint(1)
+my_mission.setViewpoint(0)
 # Attempt to start a mission:
 max_retries = 3
 my_clients = MalmoPython.ClientPool()
@@ -101,17 +98,17 @@ my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10000)) # add Minecraft machi
 
 for retry in range(max_retries):
     try:
-        agent_host.startMission( my_mission, my_clients, my_mission_record, 0, "%s-%d" % ('Moshe', i) )
+        agent_host.startMission( my_mission, my_clients, my_mission_record, 0, "")
         break
     except RuntimeError as e:
         if retry == max_retries - 1:
-            print("Error starting mission", (i+1), ":",e)
+            print("Error starting mission", e)
             exit(1)
         else:
             time.sleep(2)
 
 # Loop until mission starts:
-print("Waiting for the mission", (i+1), "to start ",)
+print("Waiting for the mission to start ")
 world_state = agent_host.getWorldState()
 while not world_state.has_mission_begun:
     #sys.stdout.write(".")
@@ -121,27 +118,33 @@ while not world_state.has_mission_begun:
         print("Error:",error.text)
 
 print()
-print("Mission", (i+1), "running.")
+print("Mission running.")
+
+last_obs = load_grid(world_state)
+print(last_obs["Mobs"][0])
 
 agent_host.sendCommand("hotbar.1 1")
 agent_host.sendCommand("hotbar.1 0")
-
 agent_host.sendCommand("use 1")
-agent_host.sendCommand("pitch 0.1")
-time.sleep(1)
+set_pitch(last_obs, 181)
+time.sleep(1.2)
+agent_host.sendCommand("turn 0")
 agent_host.sendCommand("use 0")
-agent_host.sendCommand("pitch 0")
 
 # Loop until mission ends:
+observed = False
 while world_state.is_mission_running:
     #sys.stdout.write(".")
     time.sleep(0.1)
     world_state = agent_host.getWorldState()
-    load_grid(world_state)
+    if not observed:
+        last_obs = load_grid(world_state)
+        print(last_obs["Mobs"][0])
+        observed = True
     for error in world_state.errors:
         print("Error:",error.text)
 
 
 print()
-print("Mission", (i+1), "ended")
+print("Mission ended")
 # Mission has ended.
