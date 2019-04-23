@@ -51,6 +51,7 @@ def GetMissionXML():
                     <ObservationFromNearbyEntities> 
                         <Range name="Mobs" xrange="10" yrange="1" zrange="10" update_frequency="1"/>
                     </ObservationFromNearbyEntities>
+                    <ChatCommands/>
                 </AgentHandlers>
               </AgentSection>
             </Mission>'''
@@ -163,8 +164,9 @@ last_obs = load_grid(world_state)
 
 agent_host.sendCommand("hotbar.1 1")
 agent_host.sendCommand("hotbar.1 0")
+agent_host.sendCommand("chat /summon zombie ~0 ~0 ~10")
 agent_host.sendCommand("use 1")
-set_yaw_and_pitch(30, -10)
+time.sleep(1.2)
 agent_host.sendCommand("use 0")
 
 # Loop until mission ends:
@@ -172,12 +174,6 @@ observed = False
 while world_state.is_mission_running:
     #sys.stdout.write(".")
     time.sleep(0.1)
-    world_state = agent_host.getWorldState()
-    if not observed:
-        last_obs = load_grid(world_state)
-        observed = True
-    for error in world_state.errors:
-        print("Error:",error.text)
 
 
 print()
