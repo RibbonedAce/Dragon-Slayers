@@ -49,7 +49,7 @@ def GetMissionXML():
                         <Block type="redstone_block"/>
                     </AgentQuitFromTouchingBlockType>
                     <ObservationFromNearbyEntities> 
-                        <Range name="Mobs" xrange="10" yrange="1" zrange="10" update_frequency="1"/>
+                        <Range name="Mobs" xrange="1000" yrange="1" zrange="1000" update_frequency="1"/>
                     </ObservationFromNearbyEntities>
                     <ChatCommands/>
                 </AgentHandlers>
@@ -115,6 +115,11 @@ def set_yaw_and_pitch(yaw=None, pitch=None):
     if (total_sleep < 1.2):
         time.sleep(1.2 - total_sleep)
 
+def find_mob_by_name(mobs, name, new=False):
+    for m in mobs:
+        if m["name"] == name:
+            return m
+
 # Create default Malmo objects:
 agent_host = MalmoPython.AgentHost()
 try:
@@ -129,7 +134,6 @@ if agent_host.receivedArgument("help"):
 
 my_mission = MalmoPython.MissionSpec(GetMissionXML(), True)
 my_mission_record = MalmoPython.MissionRecordSpec()
-my_mission.requestVideo(800, 500)
 my_mission.setViewpoint(0)
 # Attempt to start a mission:
 max_retries = 3
@@ -160,14 +164,19 @@ while not world_state.has_mission_begun:
 print()
 print("Mission running.")
 
-last_obs = load_grid(world_state)
 
 agent_host.sendCommand("hotbar.1 1")
 agent_host.sendCommand("hotbar.1 0")
-agent_host.sendCommand("chat /summon zombie ~0 ~0 ~10")
+agent_host.sendCommand("chat /summon zombie ~0 ~0 ~50")
 agent_host.sendCommand("use 1")
 time.sleep(1.2)
 agent_host.sendCommand("use 0")
+time.sleep(2.0)
+last_obs = load_grid(world_state)
+arrow = find_mob_by_name(last_obs["Mobs"], "Arrow")
+mob = find_mob_by_name(last_obs["Mobs"], "Zombie")
+print("Distance:", (abs(arrow["x"] - mob["x"]) ** 2 + abs(arrow["z"] - mob["z"] ** 2)) ** 0.5)
+agent_host.sendCommand("chat /kill @e[type=!player]")
 
 # Loop until mission ends:
 observed = False
