@@ -29,7 +29,7 @@ def GetMissionXML():
                   <DrawingDecorator>
                     <DrawSphere x="-27" y="70" z="0" radius="30" type="air"/>
                   </DrawingDecorator>
-                  <ServerQuitFromTimeUp timeLimitMs="5000"/>
+                  <ServerQuitFromTimeUp timeLimitMs="60000"/>
                   <ServerQuitWhenAnyAgentFinishes/>
                 </ServerHandlers>
               </ServerSection>
@@ -44,7 +44,7 @@ def GetMissionXML():
                     </Inventory>
                 </AgentStart>
                 <AgentHandlers>
-                    <ContinuousMovementCommands turnSpeedDegs="180"/>
+                    <ContinuousMovementCommands turnSpeedDegs="900"/>
                     <AgentQuitFromTouchingBlockType>
                         <Block type="redstone_block"/>
                     </AgentQuitFromTouchingBlockType>
@@ -67,13 +67,52 @@ def load_grid(world_state):
         if world_state.number_of_observations_since_last_state > 0:
             return json.loads(world_state.observations[-1].text)
 
-def set_pitch(obs, degrees):
-    current_degrees = obs["Mobs"][0]["yaw"]
-    diff = degrees - current_degrees
-    if diff > 180:
-        diff = diff - 360
-    turn = diff / 190
-    agent_host.sendCommand("turn " + str(turn))
+def set_yaw_and_pitch(yaw=None, pitch=None):
+    if yaw == None and pitch == None:
+        return
+    
+    i = 1
+    total_sleep = 0
+    
+    while True:
+        obs = load_grid(world_state)
+        current_yaw = obs["Mobs"][0]["yaw"]
+        current_pitch = obs["Mobs"][0]["pitch"]
+        
+        yaw_diff = 0
+        if yaw != None:
+            yaw_diff = yaw - current_yaw
+        pitch_diff = 0
+        if pitch != None:
+            pitch_diff = pitch - current_pitch
+
+        if abs(yaw_diff) < 0.001 and abs(pitch_diff) < 0.001:
+            break;
+            
+        yaw_multiplier = 1
+        pitch_multiplier = 1
+        if yaw_diff > 180:
+            yaw_diff = yaw_diff - 360
+        if yaw_diff < 0:
+            yaw_multiplier = -1
+        if pitch_diff < 0:
+            pitch_multiplier = -1
+            
+        yaw_sleep = abs(yaw_diff) / (i * 900)
+        pitch_sleep = abs(pitch_diff) / (i * 900)
+        sleep_time = max(yaw_sleep, pitch_sleep)
+        total_sleep += sleep_time
+        
+        agent_host.sendCommand("turn " + str(i * yaw_multiplier * yaw_sleep / sleep_time))
+        agent_host.sendCommand("pitch " + str(i * pitch_multiplier * pitch_sleep / sleep_time))
+        time.sleep(sleep_time)
+        agent_host.sendCommand("turn 0")
+        agent_host.sendCommand("pitch 0")
+            
+        i *= 0.2
+        
+    if (total_sleep < 1.2):
+        time.sleep(1.2 - total_sleep)
 
 # Create default Malmo objects:
 agent_host = MalmoPython.AgentHost()
@@ -121,14 +160,11 @@ print()
 print("Mission running.")
 
 last_obs = load_grid(world_state)
-print(last_obs["Mobs"][0])
 
 agent_host.sendCommand("hotbar.1 1")
 agent_host.sendCommand("hotbar.1 0")
 agent_host.sendCommand("use 1")
-set_pitch(last_obs, 181)
-time.sleep(1.2)
-agent_host.sendCommand("turn 0")
+set_yaw_and_pitch(30, -10)
 agent_host.sendCommand("use 0")
 
 # Loop until mission ends:
@@ -139,7 +175,6 @@ while world_state.is_mission_running:
     world_state = agent_host.getWorldState()
     if not observed:
         last_obs = load_grid(world_state)
-        print(last_obs["Mobs"][0])
         observed = True
     for error in world_state.errors:
         print("Error:",error.text)
