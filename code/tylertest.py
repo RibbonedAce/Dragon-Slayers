@@ -13,7 +13,7 @@ def GetMissionXML():
             <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
               <About>
-                <Summary>Hello world!</Summary>
+                <Summary>Shoot the Target</Summary>
               </About>
 
             <ServerSection>
@@ -25,19 +25,15 @@ def GetMissionXML():
                 <Weather>clear</Weather>
               </ServerInitialConditions>
               <ServerHandlers>
-                  <FlatWorldGenerator generatorString="3;7,44*49,73,35:1,159:4,95:13,35:13,159:11,95:10,159:14,159:6,35:6,95:6;12;"/>
-                  <DrawingDecorator>
-                    <DrawSphere x="-27" y="70" z="0" radius="30" type="air"/>
-                  </DrawingDecorator>
-                  <ServerQuitFromTimeUp timeLimitMs="60000"/>
-                  <ServerQuitWhenAnyAgentFinishes/>
+                  <FlatWorldGenerator/>
+                  <ServerQuitFromTimeUp timeLimitMs="10000"/>
                 </ServerHandlers>
               </ServerSection>
 
               <AgentSection mode="Survival">
-                <Name>CS175AwesomeMazeBot</Name>
+                <Name>Slayer</Name>
                 <AgentStart>
-                    <Placement x="0.5" y="56.0" z="0.5" yaw="0"/>
+                    <Placement x="0.5" y="4.0" z="0.5" yaw="0"/>
                     <Inventory>
                         <InventoryItem slot="0" type="bow"/>
                         <InventoryItem slot="1" type="arrow" quantity="64"/>
@@ -45,30 +41,38 @@ def GetMissionXML():
                 </AgentStart>
                 <AgentHandlers>
                     <ContinuousMovementCommands turnSpeedDegs="900"/>
-                    <AgentQuitFromTouchingBlockType>
-                        <Block type="redstone_block"/>
-                    </AgentQuitFromTouchingBlockType>
                     <ObservationFromNearbyEntities> 
                         <Range name="Mobs" xrange="1000" yrange="1" zrange="1000" update_frequency="1"/>
                     </ObservationFromNearbyEntities>
                     <ChatCommands/>
                 </AgentHandlers>
               </AgentSection>
+              
+              <AgentSection mode="Survival">
+                <Name>Mover</Name>
+                <AgentStart>
+                    <Placement x="-1.5" y="4.0" z="10.5" yaw="180"/>
+                </AgentStart>
+                <AgentHandlers>
+                    <ContinuousMovementCommands turnSpeedDegs="900"/>
+                    <ChatCommands/>
+                </AgentHandlers>
+              </AgentSection>
             </Mission>'''
 
 
-def load_grid(world_state):
+def load_grid(agent, world_state):
     while world_state.is_mission_running:
         #sys.stdout.write(".")
         time.sleep(0.1)
-        world_state = agent_host.getWorldState()
+        world_state = agent.getWorldState()
         if len(world_state.errors) > 0:
             raise AssertionError('Could not load grid.')
 
         if world_state.number_of_observations_since_last_state > 0:
             return json.loads(world_state.observations[-1].text)
 
-def set_yaw_and_pitch(yaw=None, pitch=None):
+def set_yaw_and_pitch(agent, yaw=None, pitch=None):
     if yaw == None and pitch == None:
         return
     
@@ -104,11 +108,11 @@ def set_yaw_and_pitch(yaw=None, pitch=None):
         sleep_time = max(yaw_sleep, pitch_sleep)
         total_sleep += sleep_time
         
-        agent_host.sendCommand("turn " + str(i * yaw_multiplier * yaw_sleep / sleep_time))
-        agent_host.sendCommand("pitch " + str(i * pitch_multiplier * pitch_sleep / sleep_time))
+        agent.sendCommand("turn " + str(i * yaw_multiplier * yaw_sleep / sleep_time))
+        agent.sendCommand("pitch " + str(i * pitch_multiplier * pitch_sleep / sleep_time))
         time.sleep(sleep_time)
-        agent_host.sendCommand("turn 0")
-        agent_host.sendCommand("pitch 0")
+        agent.sendCommand("turn 0")
+        agent.sendCommand("pitch 0")
             
         i *= 0.2
         
@@ -119,17 +123,30 @@ def find_mob_by_name(mobs, name, new=False):
     for m in mobs:
         if m["name"] == name:
             return m
+    return False
+
+def process_commands(time):
+    for command in commands:
+        if command[2] <= time:
+            commands.remove(command)
+            command[0].sendCommand(command[1])            
 
 # Create default Malmo objects:
-agent_host = MalmoPython.AgentHost()
+shoot_agent = MalmoPython.AgentHost()
+move_agent = MalmoPython.AgentHost()
 try:
-    agent_host.parse( sys.argv )
+    shoot_agent.parse(sys.argv)
+    move_agent.parse(sys.argv)
 except RuntimeError as e:
     print('ERROR:',e)
-    print(agent_host.getUsage())
+    print(shoot_agent.getUsage())
+    print(move_agent.getUsage())
     exit(1)
-if agent_host.receivedArgument("help"):
-    print(agent_host.getUsage())
+if shoot_agent.receivedArgument("help"):
+    print(shoot_agent.getUsage())
+    exit(0)
+if move_agent.receivedArgument("help"):
+    print(move_agent.getUsage())
     exit(0)
 
 my_mission = MalmoPython.MissionSpec(GetMissionXML(), True)
@@ -138,11 +155,15 @@ my_mission.setViewpoint(0)
 # Attempt to start a mission:
 max_retries = 3
 my_clients = MalmoPython.ClientPool()
-my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10000)) # add Minecraft machines here as available
+my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10000))
+my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10001))
+
+commands = []
 
 for retry in range(max_retries):
     try:
-        agent_host.startMission( my_mission, my_clients, my_mission_record, 0, "")
+        shoot_agent.startMission( my_mission, my_clients, my_mission_record, 0, "")
+        move_agent.startMission( my_mission, my_clients, my_mission_record, 1, "")
         break
     except RuntimeError as e:
         if retry == max_retries - 1:
@@ -153,37 +174,46 @@ for retry in range(max_retries):
 
 # Loop until mission starts:
 print("Waiting for the mission to start ")
-world_state = agent_host.getWorldState()
+world_state = shoot_agent.getWorldState()
 while not world_state.has_mission_begun:
     #sys.stdout.write(".")
     time.sleep(0.1)
-    world_state = agent_host.getWorldState()
+    world_state = shoot_agent.getWorldState()
     for error in world_state.errors:
         print("Error:",error.text)
 
 print()
 print("Mission running.")
 
+commands.append((shoot_agent, "hotbar.1 1", 0))
+commands.append((shoot_agent, "hotbar.1 0", 0))
+commands.append((shoot_agent, "use 1", 0))
+commands.append((shoot_agent, "use 0", 1.2))
+commands.append((shoot_agent, "chat /kill @e[type=!player]", 3.2))
 
-agent_host.sendCommand("hotbar.1 1")
-agent_host.sendCommand("hotbar.1 0")
-agent_host.sendCommand("chat /summon zombie ~0 ~0 ~50")
-agent_host.sendCommand("use 1")
-time.sleep(1.2)
-agent_host.sendCommand("use 0")
-time.sleep(2.0)
-last_obs = load_grid(world_state)
-arrow = find_mob_by_name(last_obs["Mobs"], "Arrow")
-mob = find_mob_by_name(last_obs["Mobs"], "Zombie")
-print("Distance:", (abs(arrow["x"] - mob["x"]) ** 2 + abs(arrow["z"] - mob["z"] ** 2)) ** 0.5)
-agent_host.sendCommand("chat /kill @e[type=!player]")
+for i in range(0,10,2):
+    commands.append((move_agent, "strafe 1", i))
+    commands.append((move_agent, "strafe -1", i+1))
 
 # Loop until mission ends:
-observed = False
+total_time = 0
+recorded = False
 while world_state.is_mission_running:
     #sys.stdout.write(".")
     time.sleep(0.1)
+    process_commands(total_time)
+    
+    if not recorded and total_time >= 3.2:
+        recorded = True
+        last_obs = load_grid(shoot_agent, world_state)
+        arrow = find_mob_by_name(last_obs["Mobs"], "Arrow")
+        if not arrow:
+            print("Hit target!")
+        else:
+            mob = find_mob_by_name(last_obs["Mobs"], "Mover")
+            print("Missed by", (abs(arrow["x"] - mob["x"]) ** 2 + abs(arrow["z"] - mob["z"] ** 2)) ** 0.5)
 
+    total_time += 0.1
 
 print()
 print("Mission ended")
