@@ -55,7 +55,7 @@ def GetMissionXML():
               <AgentSection mode="Survival">
                 <Name>Mover</Name>
                 <AgentStart>
-                    <Placement x="'''+params[0]+'''" y="4.0" z="'''+params[1]+'''" yaw="180"/>
+                    <Placement x="0.5" y="4.0" z="'''+params[1]+'''" yaw="180"/>
                     <Inventory>
                         '''+fill_inventory()+'''
                     </Inventory>
@@ -71,7 +71,7 @@ def GetMissionXML():
             </Mission>'''
 
 def get_mission_randoms():
-    return str(random.randrange(-20, 20)), str(random.randrange(-20, 20))
+    return str(random.randrange(-20, 20)), str(random.randrange(10, 20))
 
 def fill_inventory():
     result = ""
@@ -137,6 +137,7 @@ def set_yaw_and_pitch(agent, yaw=None, pitch=None):
         
     if (total_sleep < 1.2):
         time.sleep(1.2 - total_sleep)
+    return max(1.2, total_sleep)
 
 def find_mob_by_name(mobs, name, new=False):
     for m in mobs:
@@ -187,6 +188,58 @@ def get_next_shot(prev_angle, error, step_size):
 
     return prev_angle*(1-step_size) + bound_angle*step_size
 
+def shoot_at_target():
+    global angle
+    global total_time
+    global commands
+    
+    last_obs = load_grid(move_agent, world_state)
+    last_angle = angle
+    player_loc = find_mob_by_name(last_obs["Mobs"], "Slayer")
+    target_loc = find_mob_by_name(last_obs["Mobs"], "Mover")
+    distance = (abs(player_loc["x"] - target_loc["x"]) ** 2 + abs(player_loc["z"] - target_loc["z"] ** 2)) ** 0.5
+    angle = 0
+    if total_time < 1:
+        angle = get_first_shot(distance)
+    else:
+        angle = get_next_shot(last_angle, error, step_size)
+    total_time += set_yaw_and_pitch(shoot_agent, None, -angle)
+    commands.append((shoot_agent, "use 1", total_time + 0))
+    commands.append((shoot_agent, "use 0", total_time + 1.2))
+
+def record_data():
+    global error
+    global total_time
+    global commands
+    global step_size
+    global angle
+    
+    #last_obs = load_grid(shoot_agent, world_state)
+    #player = find_mob_by_name(last_obs["Mobs"], "Slayer")
+    #target = find_mob_by_name(last_obs["Mobs"], "Mover")
+    #angle = look_angle(player["x"], player["z"], target["x"], target["z"])
+    #set_yaw_and_pitch(shoot_agent, angle, None)
+
+    last_obs = load_grid(move_agent, world_state)
+    error = 0
+    arrow = find_mob_by_name(last_obs["Mobs"], "Arrow")
+    target_loc = find_mob_by_name(last_obs["Mobs"], "Mover")
+    if not arrow:
+        if find_mob_by_name(last_obs["Mobs"], "Mover")["life"] < 20:
+            good_shots[distance] = angle
+        else:
+            error = 100
+    else:
+        error = arrow["z"] - target_loc["z"]
+    print("Error:", error)
+    commands.append((shoot_agent, "chat /kill @e[type=!player]", total_time + 0))
+    step_size *= 0.8
+
+    if error == 0:
+        return 100
+    else:
+        return -abs(error)
+
 good_shots = {}
 
 # Create default Malmo objects:
@@ -215,6 +268,11 @@ max_retries = 3
 my_clients = MalmoPython.ClientPool()
 my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10001))
 my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10002))
+
+directions = [(-1, -1), (-1, 0), (-1, 1), (-0.5, -0.5), (-0.5, 0), (-0.5, 0.5),
+              (-0.1, -0.1), (-0.1, 0), (-0.1, 0.1), (0, -1), (0, -0.5), (0, -0.1),
+              (0, 0.1), (0, 0.5), (0, 1), (0.1, -0.1), (0.1, 0), (0.1, 0.1),
+              (0.5, -0.5), (0.5, 0), (0.5, 0.5), (1, -1), (1, 0), (1, 1)]
 
 commands = []
 
@@ -262,12 +320,13 @@ commands.append((shoot_agent, "hotbar.1 0", 0))
     #commands.append((move_agent, "strafe -1", i+1))
 
 # Loop until mission ends:
-total_time = 0
 shoot_cycle = 0
-record_cycle = 2
+record_cycle = 10
+total_time = 0
 step_size = 1
 error = 0
 angle = 0
+reward = 0
 while world_state.is_mission_running:
     #sys.stdout.write(".")
     time.sleep(0.1)
@@ -276,45 +335,11 @@ while world_state.is_mission_running:
 
     if total_time >= shoot_cycle:
         shoot_cycle += 11.2
-        '''
-        last_obs = load_grid(move_agent, world_state)
-        last_angle = angle
-        player_loc = find_mob_by_name(last_obs["Mobs"], "Slayer")
-        target_loc = find_mob_by_name(last_obs["Mobs"], "Mover")
-        distance = (abs(player_loc["x"] - target_loc["x"]) ** 2 + abs(player_loc["z"] - target_loc["z"] ** 2)) ** 0.5
-        angle = 0
-        if total_time < 1:
-            angle = get_first_shot(distance)
-        else:
-            angle = get_next_shot(last_angle, error, step_size)
-        set_yaw_and_pitch(shoot_agent, None, -angle)
-        commands.append((shoot_agent, "use 1", total_time + 0))
-        commands.append((shoot_agent, "use 0", total_time + 1.2))
-'''
+        shoot_at_target()
+
     if total_time >= record_cycle:
-        record_cycle += 2
-        last_obs = load_grid(shoot_agent, world_state)
-        print(last_obs)
-        player = find_mob_by_name(last_obs["Mobs"], "Slayer")
-        target = find_mob_by_name(last_obs["Mobs"], "Mover")
-        angle = look_angle(player["x"], player["z"], target["x"], target["z"])
-        print(angle)
-        set_yaw_and_pitch(shoot_agent, angle, None)
-'''
-        last_obs = load_grid(move_agent, world_state)
-        error = 0
-        arrow = find_mob_by_name(last_obs["Mobs"], "Arrow")
-        if not arrow:
-            if find_mob_by_name(last_obs["Mobs"], "Mover")["life"] < 20:
-                good_shots[distance] = angle
-            else:
-                error = 100
-        else:
-            error = arrow["z"] - target_loc["z"]
-        print("Error:", error)
-        commands.append((shoot_agent, "chat /kill @e[type=!player]", total_time + 0))
-        step_size *= 0.8
-        '''
+        record_cycle += 11.2
+        reward = record_data()
 
 print()
 print("Mission ended")
