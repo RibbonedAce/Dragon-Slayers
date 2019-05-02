@@ -8,6 +8,7 @@ import sys
 import time
 import json
 import random
+import math
 
 def GetMissionXML():
     params = get_mission_randoms()
@@ -45,7 +46,7 @@ def GetMissionXML():
                 <AgentHandlers>
                     <ContinuousMovementCommands turnSpeedDegs="900"/>
                     <ObservationFromNearbyEntities> 
-                        <Range name="Stats" xrange="1" yrange="1" zrange="1" update_frequency="1"/>
+                        <Range name="Mobs" xrange="10000" yrange="1" zrange="10000" update_frequency="1"/>
                     </ObservationFromNearbyEntities>
                     <ChatCommands/>
                 </AgentHandlers>
@@ -54,7 +55,7 @@ def GetMissionXML():
               <AgentSection mode="Survival">
                 <Name>Mover</Name>
                 <AgentStart>
-                    <Placement x="0.5" y="4.0" z="'''+params+'''" yaw="180"/>
+                    <Placement x="0.5" y="4.0" z="'''+params[1]+'''" yaw="180"/>
                     <Inventory>
                         '''+fill_inventory()+'''
                     </Inventory>
@@ -70,7 +71,8 @@ def GetMissionXML():
             </Mission>'''
 
 def get_mission_randoms():
-    return str(random.randrange(50, 100))
+    return str(random.randrange(-20, 20)), str(random.randrange(20, 40))
+
 
 def fill_inventory():
     result = ""
@@ -98,7 +100,7 @@ def set_yaw_and_pitch(agent, yaw=None, pitch=None):
     
     while True:
         obs = load_grid(agent, world_state)
-        stats = find_mob_by_name(obs["Stats"], "Slayer")
+        stats = find_mob_by_name(obs["Mobs"], "Slayer")
         current_yaw = stats["yaw"]
         current_pitch = stats["pitch"]
         
@@ -148,6 +150,9 @@ def process_commands(time):
         if command[2] <= time:
             commands.remove(command)
             command[0].sendCommand(command[1])
+
+def look_angle(xorigin, zorigin, xtarget, ztarget):
+    return math.degrees(math.atan2(ztarget-zorigin, xtarget-xorigin))
 
 def get_first_shot(distance):
     lower_bound = 0
@@ -280,6 +285,10 @@ while world_state.is_mission_running:
 
     if total_time >= record_cycle:
         record_cycle += 11.2
+        #last_obs = load_grid(shoot_agent, world_state)
+        #player = find_mob_by_name(last_obs["Mobs"], "Slayer")
+        #target = find_mob_by_name(last_obs["Mobs"], "Mover")
+        #print(target["x"]-player["x"], target["z"]-player["z"], look_angle(player["x"], player["z"], target["x"], target["z"]))
 
         last_obs = load_grid(move_agent, world_state)
         error = 0
@@ -294,6 +303,7 @@ while world_state.is_mission_running:
         print("Error:", error)
         commands.append((shoot_agent, "chat /kill @e[type=!player]", total_time + 0))
         step_size *= 0.8
+        
 
 print()
 print("Mission ended")
