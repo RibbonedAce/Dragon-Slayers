@@ -29,7 +29,7 @@ def GetMissionXML():
               </ServerInitialConditions>
               <ServerHandlers>
                   <FlatWorldGenerator/>
-                  <ServerQuitFromTimeUp timeLimitMs="60000"/>
+                  <ServerQuitFromTimeUp timeLimitMs="180000"/>
                 </ServerHandlers>
               </ServerSection>
 
@@ -55,6 +55,9 @@ def GetMissionXML():
                 <Name>Mover</Name>
                 <AgentStart>
                     <Placement x="0.5" y="4.0" z="'''+params+'''" yaw="180"/>
+                    <Inventory>
+                        '''+fill_inventory()+'''
+                    </Inventory>
                 </AgentStart>
                 <AgentHandlers>
                     <ContinuousMovementCommands turnSpeedDegs="900"/>
@@ -68,6 +71,12 @@ def GetMissionXML():
 
 def get_mission_randoms():
     return str(random.randrange(50, 100))
+
+def fill_inventory():
+    result = ""
+    for i in range(36):
+        result += "<InventoryItem slot=\"" + str(i) + "\" type=\"bow\" quantity=\"1\"/>\n"
+    return result
 
 def load_grid(agent, world_state):
     while world_state.is_mission_running:
@@ -200,8 +209,8 @@ my_mission.setViewpoint(0)
 # Attempt to start a mission:
 max_retries = 3
 my_clients = MalmoPython.ClientPool()
-my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10000))
 my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10001))
+my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10002))
 
 commands = []
 
@@ -255,6 +264,7 @@ while world_state.is_mission_running:
         shoot_cycle += 11.2
         
         last_obs = load_grid(move_agent, world_state)
+        print(last_obs)
         last_angle = angle
         player_loc = find_mob_by_name(last_obs["Mobs"], "Slayer")
         target_loc = find_mob_by_name(last_obs["Mobs"], "Mover")
@@ -272,11 +282,13 @@ while world_state.is_mission_running:
         record_cycle += 11.2
 
         last_obs = load_grid(move_agent, world_state)
-        print(last_obs)
         error = 0
         arrow = find_mob_by_name(last_obs["Mobs"], "Arrow")
         if not arrow:
-            good_shots[distance] = angle
+            if find_mob_by_name(last_obs["Mobs"], "Mover")["life"] < 20:
+                good_shots[distance] = angle
+            else:
+                error = 100
         else:
             error = arrow["z"] - target_loc["z"]
         print("Error:", error)
