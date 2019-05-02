@@ -9,7 +9,7 @@ class MinecraftEnvironment(Environment):
             :rtype: by default, this is assumed to be a numpy array of doubles
             :note: This function is abstract and has to be implemented.
         """
-        #abstractMethod()
+        return [1,1]
 
     def performAction(self, action):
         """ perform an action on the world that changes it's internal state (maybe
@@ -18,9 +18,6 @@ class MinecraftEnvironment(Environment):
             :type action: by default, this is assumed to be a numpy array of doubles
             :note: This function is abstract and has to be implemented.
         """
-        #abstractMethod()
+        return 50
 
-    def reset(self):
-        """ Most environments will implement this optional method that allows for
-            reinitialization.
-        """
+ 

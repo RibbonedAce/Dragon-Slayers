@@ -1,39 +1,35 @@
-from pybrain.rl.learners.directsearch.enac import ENAC
+from pybrain.rl.learners.valuebased.interface import ActionValueNetwork
+from scipy import where
+from random import choice
 
-class MineCraftENAC(ENAC):
-    """ Episodic Natural Actor-Critic. See J. Peters "Natural Actor-Critic", 2005.
-        Estimates natural gradient with regression of log likelihoods to rewards.
-    """
-    #Nothing to implement here either, I think
-    """
-    def learn(self):
-         calls the gradient calculation function and executes a step in direction
-            of the gradient, scaled with a small learning rate alpha. 
-        assert self.dataset != None
-        assert self.module != None
+class MineCraftActionValueNetwork(ActionValueNetwork):
+    """ A network that approximates action values for continuous state /
+        discrete action RL environments. To receive the maximum action
+        for a given state, a forward pass is executed for all discrete
+        actions, and the maximal action is returned. This network is used
+        for the NFQ algorithm. """
+    def getMaxAction(self, state):
+        """ Return the action with the maximal value for the given state. """
+        print("GETMAXACTION")
+        print("STATE": str(state))
 
-        # calculate the gradient with the specific function from subclass
-        gradient = self.calculateGradient()
-
-        # scale gradient if it has too large values
-        if max(gradient) > 1000:
-            gradient = gradient / max(gradient) * 1000
-
-        # update the parameters of the module
-        p = self.gd(gradient.flatten())
-        self.network._setParameters(p)
-        self.network.reset()
-
-    def explore(self, state, action):
-        # forward pass of exploration
-        explorative = ExploringLearner.explore(self, state, action)
-
-        # backward pass through network and store derivs
-        self.network.backward()
-        self.loglh.appendLinked(self.network.derivs.copy())
-
-        return explorative
-
-
-
-    """
+        
+        values = self.params.reshape(self.numRows, self.numColumns)[int(state), :].flatten()
+        self.maxvalue = max(values)
+        action = where(values == self.maxvalue)[0]
+        action = choice(action)
+        
+        return action
+    
+    def getUnexploredAction(self,state,value=1.0,default=[0]):
+        #state is environment
+        '''
+        Return an action with a value equal to the given one
+        '''
+        values = self.params.reshape(self.numRows, self.numColumns)[int(state), :].flatten()
+        action = where(values == value)[0]
+        if default[0] in action or len(action) == 0:
+            return default[0]
+        
+        action = choice(action)
+        return action

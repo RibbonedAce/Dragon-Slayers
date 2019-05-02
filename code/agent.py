@@ -1,25 +1,16 @@
-from pybrain.rl.agents.logging import LoggingAgent
+from pybrain.rl.agents.learning import LearningAgent
 
-class MinecraftAgent(LoggingAgent):
-
-   
-
+class MinecraftAgent(LearningAgent):
+    """ LearningAgent has a module, a learner, that modifies the module, and an explorer,
+        which perturbs the actions. It can have learning enabled or disabled and can be
+        used continuously or with episodes.
+    """
     def integrateObservation(self, obs):
         """Step 1: store the observation received in a temporary variable until action is called and
         reward is given. """
         self.lastobs = obs
         self.lastaction = None
         self.lastreward = None
-
-
-    def getAction(self):
-        """Step 2: store the action in a temporary variable until reward is given. """
-        assert self.lastobs != None
-        assert self.lastaction == None
-        assert self.lastreward == None
-
-        # implement getAction in subclass and set self.lastaction
-
 
     def giveReward(self, r):
         """Step 3: store observation, action and reward in the history dataset. """
@@ -34,17 +25,28 @@ class MinecraftAgent(LoggingAgent):
         if self.logging:
             self.history.addSample(self.lastobs, self.lastaction, self.lastreward)
 
+    
 
-    def newEpisode(self):
-        """ Indicate the beginning of a new episode in the training cycle. """
-        if self.logging:
-            self.history.newSequence()
+    def getAction(self):
+        """ Activate the module with the last observation, add the exploration from
+            the explorer object and store the result as last action. """
+
+        LearningAgent.getAction(self)
+
+        self.lastaction = self.module.activate(self.lastobs)
+
+        if self.learning:
+            self.lastaction = self.learner.explore(self.lastobs, self.lastaction)
+
+        return self.lastaction
 
 
     def reset(self):
-        """ Clear the history of the agent. """
-        self.lastobs = None
-        self.lastaction = None
-        self.lastreward = None
+        """ Clear the history of the agent and resets the module and learner. """
+        LearningAgent.reset(self)
+        self.module.reset()
+        if self.learning:
+            self.learner.reset()
 
-        self.history.clear()
+
+  
