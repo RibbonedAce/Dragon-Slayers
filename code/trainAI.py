@@ -5,6 +5,7 @@ from pybrain.rl.environments.mazes import Maze, MDPMazeTask
 from pybrain.rl.learners.valuebased import ActionValueTable
 from pybrain.rl.agents import LearningAgent
 from pybrain.rl.learners import NFQ
+from pybrain.optimization import StochasticHillClimber
 from pybrain.rl.experiments import Experiment
 from pybrain.rl.environments import Task
 import random
@@ -55,7 +56,7 @@ def save_params(file_name,network):
 if __name__ == "__main__":
     environment = MinecraftEnvironment()
     controller = MineCraftActionValueNetwork(NUM_INPUTS,NUM_OUTPUTS)
-    learner = NFQ()
+    learner = StochasticHillClimber()
     agent = MinecraftAgent(controller, learner)
     task = MinecraftTask(environment)
     experiment = MinecraftExperiment(task, agent)
