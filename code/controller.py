@@ -1,5 +1,6 @@
 from pybrain.rl.learners.valuebased.interface import ActionValueNetwork
-from scipy import where
+from scipy import argmax, array, r_, asarray, where
+import numpy as np
 from random import choice
 
 class MineCraftActionValueNetwork(ActionValueNetwork):
@@ -11,21 +12,21 @@ class MineCraftActionValueNetwork(ActionValueNetwork):
     def getMaxAction(self, state):
         """ Return the action with the maximal value for the given state. """
         print("GETMAXACTION")
-        print("STATE": str(state))
-
-        
-        values = self.params.reshape(self.numRows, self.numColumns)[int(state), :].flatten()
-        self.maxvalue = max(values)
-        action = where(values == self.maxvalue)[0]
-        action = choice(action)
-        
-        return action
+        print("STATE: "+ str(state))
+        actions = self.getActionValues(state)
+        print("output of neural net: " + str(actions))
+        max_index = argmax(actions)
+        print("max action index: " + str(max_index))
+        print("max action-value: " + str(np.amax(actions)))
+        return argmax(actions)
+    
     
     def getUnexploredAction(self,state,value=1.0,default=[0]):
         #state is environment
         '''
         Return an action with a value equal to the given one
         '''
+        ''''
         values = self.params.reshape(self.numRows, self.numColumns)[int(state), :].flatten()
         action = where(values == value)[0]
         if default[0] in action or len(action) == 0:
@@ -33,3 +34,6 @@ class MineCraftActionValueNetwork(ActionValueNetwork):
         
         action = choice(action)
         return action
+
+        '''
+        pass
