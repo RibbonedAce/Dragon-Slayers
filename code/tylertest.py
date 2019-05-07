@@ -192,6 +192,7 @@ def shoot_at_target():
     global angle
     global total_time
     global commands
+    global distance
     
     last_obs = load_grid(move_agent, world_state)
     last_angle = angle
@@ -213,6 +214,7 @@ def record_data():
     global commands
     global step_size
     global angle
+    global distance
     
     #last_obs = load_grid(shoot_agent, world_state)
     #player = find_mob_by_name(last_obs["Mobs"], "Slayer")
