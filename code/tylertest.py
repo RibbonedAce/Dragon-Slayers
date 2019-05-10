@@ -85,6 +85,10 @@ def fill_inventory():
     return result
 
 def load_grid(agent, world_state):
+    while not world_state.is_mission_running:
+        time.sleep(0.1)
+        world_state = agent.getWorldState()
+        
     while world_state.is_mission_running:
         #sys.stdout.write(".")
         time.sleep(0.1)
@@ -93,7 +97,7 @@ def load_grid(agent, world_state):
             raise AssertionError('Could not load grid.')
 
         if world_state.number_of_observations_since_last_state > 0 and \
-           not (json.loads(world_state.observations[-1].text) is None):
+           json.loads(world_state.observations[-1].text):
             return json.loads(world_state.observations[-1].text)
 
 def set_yaw_and_pitch(agent, yaw=None, pitch=None):
@@ -162,7 +166,7 @@ def look_angle(xorigin, zorigin, xtarget, ztarget):
 
 def get_first_shot(distance):
     good_array = np.asarray(good_shots)
-    if len(good_shots) > 1:
+    if len(good_shots) > 5:
         poly = PolynomialFeatures(2, include_bias=False).fit(good_array[:,0].reshape(-1, 1))
         predictor = LinearRegression().fit(poly.transform(good_array[:,0].reshape(-1, 1)), good_array[:,1])
         return predictor.predict(poly.transform(np.asarray([[distance]])))[0]
@@ -208,11 +212,12 @@ def shoot_at_target():
     target_loc = find_mob_by_name(last_obs["Mobs"], "Mover")
     distance = (abs(player_loc["x"] - target_loc["x"]) ** 2 + abs(player_loc["z"] - target_loc["z"] ** 2)) ** 0.5
     angle = 0
-    if total_time < 1:
+    if total_time < 1 or len(good_shots) > 10:
         angle = get_first_shot(distance)
         mover_pos = target_loc["z"]
     else:
-        angle = get_next_shot(last_angle, error, step_size)
+        angle = get_next_shot(angle, error, step_size)
+        step_size *= 0.8
     total_time += set_yaw_and_pitch(shoot_agent, None, -angle)
     commands.append((shoot_agent, "use 1", total_time + 0))
     commands.append((shoot_agent, "use 0", total_time + 1.2))
@@ -243,10 +248,11 @@ def record_data():
         else:
             error = 100
     else:
+        player_loc = find_mob_by_name(last_obs["Mobs"], "Slayer")
         error = arrow["z"] - target_loc["z"]
+        good_shots.append([arrow["z"] - player_loc["z"] - 2, angle])
     print("Error:", error)
     commands.append((shoot_agent, "chat /kill @e[type=!player]", total_time + 0))
-    step_size *= 0.8
 
     if error == 0:
         return 100
@@ -322,6 +328,8 @@ for i in range(iterations):
         world_state = shoot_agent.getWorldState()
         for error in world_state.errors:
             print("Error:",error.text)
+            
+    world_state = shoot_agent.getWorldState()
 
     print()
     print("Mission running.")
