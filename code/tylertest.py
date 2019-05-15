@@ -9,6 +9,10 @@ import time
 import json
 import random
 import math
+import numpy as np
+from matplotlib import pyplot as plt
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import PolynomialFeatures
 
 def GetMissionXML():
     params = get_mission_randoms()
@@ -31,6 +35,7 @@ def GetMissionXML():
               <ServerHandlers>
                   <FlatWorldGenerator/>
                   <ServerQuitFromTimeUp timeLimitMs="180000"/>
+                  <ServerQuitWhenAnyAgentFinishes/>
                 </ServerHandlers>
               </ServerSection>
 
@@ -71,7 +76,7 @@ def GetMissionXML():
             </Mission>'''
 
 def get_mission_randoms():
-    return str(random.randrange(-20, 20)), str(random.randrange(10, 20))
+    return str(random.randrange(-20, 20)), str(random.randrange(20, 50))
 
 def fill_inventory():
     result = ""
@@ -80,14 +85,18 @@ def fill_inventory():
     return result
 
 def load_grid(agent, world_state):
-    while world_state.is_mission_running:
+    wait_time = 0
+
+    while wait_time < 10:
         #sys.stdout.write(".")
         time.sleep(0.1)
+        wait_time += 0.1
         world_state = agent.getWorldState()
         if len(world_state.errors) > 0:
             raise AssertionError('Could not load grid.')
 
-        if world_state.number_of_observations_since_last_state > 0:
+        if world_state.number_of_observations_since_last_state > 0 and \
+           json.loads(world_state.observations[-1].text):
             return json.loads(world_state.observations[-1].text)
 
 def set_yaw_and_pitch(agent, yaw=None, pitch=None):
@@ -135,9 +144,9 @@ def set_yaw_and_pitch(agent, yaw=None, pitch=None):
             
         i *= 0.2
         
-    if (total_sleep < 1.2):
-        time.sleep(1.2 - total_sleep)
-    return max(1.2, total_sleep)
+    if (total_sleep < 1.3):
+        time.sleep(1.3 - total_sleep)
+    return max(1.3, total_sleep)
 
 def find_mob_by_name(mobs, name, new=False):
     for m in mobs:
@@ -155,36 +164,37 @@ def look_angle(xorigin, zorigin, xtarget, ztarget):
     return math.degrees(math.atan2(xorigin-xtarget, ztarget-zorigin))
 
 def get_first_shot(distance):
+    good_array = np.asarray(shots[0] + shots[1])
+    if good_array.shape[0] > 5:
+        poly = PolynomialFeatures(2, include_bias=False).fit(good_array[:,0].reshape(-1, 1))
+        predictor = LinearRegression().fit(poly.transform(good_array[:,0].reshape(-1, 1)), good_array[:,1])
+        return predictor.predict(poly.transform(np.asarray([[distance]])))[0]
+    
     lower_bound = 0
     lower_angle = 0
     upper_bound = 1000
     upper_angle = 45
     
-    for key in good_shots.keys():
-        if key < distance and key > lower_bound:
-            lower_bound = key
-            lower_angle = good_shots[key]
-        elif key > distance and key < upper_bound:
-            upper_bound = key
-            upper_angle = good_shots[key]
+    for i in range(good_array.shape[0]):
+        if good_array[i,0] < distance and good_array[i,0] > lower_bound:
+            lower_bound = good_array[i,0]
+            lower_angle = good_array[i,1]
+        elif good_array[i,0] > distance and good_array[i,0] < upper_bound:
+            upper_bound = good_array[i,0]
+            upper_angle = good_array[i,1]
 
     interp = (distance - lower_bound) / (upper_bound - lower_bound)
     return lower_angle*(1-interp) + upper_angle*interp
 
 def get_next_shot(prev_angle, error, step_size):
+    good_array = np.asarray(shots[0] + shots[1])
     bound_angle = prev_angle
     
     if error < 0:
         bound_angle = 45
-        for value in good_shots.values():
-            if value > prev_angle and value < bound_angle:
-                bound_angle = value
         
     elif error > 0:
         bound_angle = 0
-        for value in good_shots.values():
-            if value < prev_angle and value > bound_angle:
-                bound_angle = value
 
     return prev_angle*(1-step_size) + bound_angle*step_size
 
@@ -193,6 +203,8 @@ def shoot_at_target():
     global total_time
     global commands
     global distance
+    global mover_pos
+    global step_size
     
     last_obs = load_grid(move_agent, world_state)
     last_angle = angle
@@ -200,13 +212,15 @@ def shoot_at_target():
     target_loc = find_mob_by_name(last_obs["Mobs"], "Mover")
     distance = (abs(player_loc["x"] - target_loc["x"]) ** 2 + abs(player_loc["z"] - target_loc["z"] ** 2)) ** 0.5
     angle = 0
-    if total_time < 1:
+    if total_time < 1 or len(shots[0] + shots[1]) > 5:
         angle = get_first_shot(distance)
+        mover_pos = target_loc["z"]
     else:
-        angle = get_next_shot(last_angle, error, step_size)
+        angle = get_next_shot(angle, error, step_size)
+        step_size *= 0.8
     total_time += set_yaw_and_pitch(shoot_agent, None, -angle)
     commands.append((shoot_agent, "use 1", total_time + 0))
-    commands.append((shoot_agent, "use 0", total_time + 1.2))
+    commands.append((shoot_agent, "use 0", total_time + 1.3))
 
 def record_data():
     global error
@@ -215,6 +229,7 @@ def record_data():
     global step_size
     global angle
     global distance
+    global mover_pos
     
     #last_obs = load_grid(shoot_agent, world_state)
     #player = find_mob_by_name(last_obs["Mobs"], "Slayer")
@@ -227,22 +242,24 @@ def record_data():
     arrow = find_mob_by_name(last_obs["Mobs"], "Arrow")
     target_loc = find_mob_by_name(last_obs["Mobs"], "Mover")
     if not arrow:
-        if find_mob_by_name(last_obs["Mobs"], "Mover")["life"] < 20:
-            good_shots[distance] = angle
+        if find_mob_by_name(last_obs["Mobs"], "Mover")["z"] != mover_pos:
+            shots[0].append([distance, angle])
+            mover_pos = find_mob_by_name(last_obs["Mobs"], "Mover")["z"]
         else:
             error = 100
     else:
+        player_loc = find_mob_by_name(last_obs["Mobs"], "Slayer")
         error = arrow["z"] - target_loc["z"]
+        shots[1].append([arrow["z"] - player_loc["z"] - 2, angle])
     print("Error:", error)
     commands.append((shoot_agent, "chat /kill @e[type=!player]", total_time + 0))
-    step_size *= 0.8
 
     if error == 0:
         return 100
     else:
         return -abs(error)
 
-good_shots = {}
+shots = [[], []]
 
 # Create default Malmo objects:
 shoot_agent = MalmoPython.AgentHost()
@@ -262,87 +279,104 @@ if move_agent.receivedArgument("help"):
     print(move_agent.getUsage())
     exit(0)
 
-my_mission = MalmoPython.MissionSpec(GetMissionXML(), True)
-my_mission_record = MalmoPython.MissionRecordSpec()
-my_mission.setViewpoint(0)
-# Attempt to start a mission:
-max_retries = 3
-my_clients = MalmoPython.ClientPool()
-my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10001))
-my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10002))
-
 directions = [(-1, -1), (-1, 0), (-1, 1), (-0.5, -0.5), (-0.5, 0), (-0.5, 0.5),
               (-0.1, -0.1), (-0.1, 0), (-0.1, 0.1), (0, -1), (0, -0.5), (0, -0.1),
               (0, 0.1), (0, 0.5), (0, 1), (0.1, -0.1), (0.1, 0), (0.1, 0.1),
               (0.5, -0.5), (0.5, 0), (0.5, 0.5), (1, -1), (1, 0), (1, 1)]
 
-commands = []
+iterations = 3
+for i in range(iterations):
+    my_mission = MalmoPython.MissionSpec(GetMissionXML(), True)
+    my_mission_record = MalmoPython.MissionRecordSpec()
+    my_mission.setViewpoint(0)
+    # Attempt to start a mission:
+    max_retries = 25
+    my_clients = MalmoPython.ClientPool()
+    my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10001))
+    my_clients.add(MalmoPython.ClientInfo('127.0.0.1', 10002))
+    
+    commands = []
+    
+    for retry in range(max_retries):
+        try:
+            shoot_agent.startMission( my_mission, my_clients, my_mission_record, 0, "")
+            break
+        except RuntimeError as e:
+            print("Error starting mission", e)
+            if retry == max_retries - 1:
+                exit(1)
+            else:
+                time.sleep(2)
 
-for retry in range(max_retries):
-    try:
-        shoot_agent.startMission( my_mission, my_clients, my_mission_record, 0, "")
-        break
-    except RuntimeError as e:
-        print("Error starting mission", e)
-        if retry == max_retries - 1:
-            exit(1)
-        else:
-            time.sleep(2)
+    for retry in range(max_retries):
+        try:
+            move_agent.startMission( my_mission, my_clients, my_mission_record, 1, "")
+            break
+        except RuntimeError as e:
+            print("Error starting mission", e)
+            if retry == max_retries - 1:
+                exit(1)
+            else:
+                time.sleep(2)
 
-for retry in range(max_retries):
-    try:
-        move_agent.startMission( my_mission, my_clients, my_mission_record, 1, "")
-        break
-    except RuntimeError as e:
-        print("Error starting mission", e)
-        if retry == max_retries - 1:
-            exit(1)
-        else:
-            time.sleep(2)
-
-# Loop until mission starts:
-print("Waiting for the mission to start ")
-world_state = shoot_agent.getWorldState()
-while not world_state.has_mission_begun:
-    #sys.stdout.write(".")
-    time.sleep(0.1)
+    # Loop until mission starts:
+    print("Waiting for the mission to start ")
     world_state = shoot_agent.getWorldState()
-    for error in world_state.errors:
-        print("Error:",error.text)
+    while not world_state.has_mission_begun:
+        #sys.stdout.write(".")
+        time.sleep(0.1)
+        world_state = shoot_agent.getWorldState()
+        for error in world_state.errors:
+            print("Error:",error.text)
+            
+    world_state = shoot_agent.getWorldState()
 
-print()
-print("Mission running.")
+    print()
+    print("Mission running.")
 
-commands.append((shoot_agent, "chat /kill @e[type=!player]", 0))
-commands.append((shoot_agent, "hotbar.1 1", 0))
-commands.append((shoot_agent, "hotbar.1 0", 0))
+    commands.append((shoot_agent, "chat /kill @e[type=!player]", 0))
+    commands.append((shoot_agent, "hotbar.1 1", 0))
+    commands.append((shoot_agent, "hotbar.1 0", 0))
 
-#for i in range(0,10,2):
-    #commands.append((move_agent, "strafe 1", i))
-    #commands.append((move_agent, "strafe -1", i+1))
+    #for i in range(0,10,2):
+        #commands.append((move_agent, "strafe 1", i))
+        #commands.append((move_agent, "strafe -1", i+1))
 
-# Loop until mission ends:
-shoot_cycle = 0
-record_cycle = 10
-total_time = 0
-step_size = 1
-error = 0
-angle = 0
-reward = 0
-while world_state.is_mission_running:
-    #sys.stdout.write(".")
-    time.sleep(0.1)
-    total_time += 0.1
-    process_commands(total_time)
+    # Loop until mission ends:
+    shoot_cycle = 0
+    record_cycle = 10
+    total_time = 0
+    step_size = 1
+    error = 0
+    angle = 0
+    mover_pos = 0
+    while world_state.is_mission_running:
+        #sys.stdout.write(".")
+        time.sleep(0.1)
+        total_time += 0.1
+        process_commands(total_time)
 
-    if total_time >= shoot_cycle:
-        shoot_cycle += 11.2
-        shoot_at_target()
+        if total_time >= shoot_cycle:
+            shoot_cycle += 11.3
+            shoot_at_target()
 
-    if total_time >= record_cycle:
-        record_cycle += 11.2
-        reward = record_data()
+        if total_time >= record_cycle:
+            record_cycle += 11.3
+            reward = record_data()
 
-print()
-print("Mission ended")
-# Mission has ended.
+        world_state = shoot_agent.getWorldState()
+
+    print()
+    print("Mission ended")
+    # Mission has ended.
+
+good_array = np.asarray(shots[0])
+bad_array = np.asarray(shots[1])
+total_array = np.asarray(shots[0] + shots[1])
+poly = PolynomialFeatures(2, include_bias=False).fit(total_array[:,0].reshape(-1, 1))
+predictor = LinearRegression().fit(poly.transform(total_array[:,0].reshape(-1, 1)), total_array[:,1])
+x = np.linspace(0, total_array[:,0].max(), 1000).reshape(-1, 1)
+plt.plot(x, predictor.predict(poly.transform(x)))
+plt.scatter(good_array[:,0], good_array[:,1], c="g")
+plt.scatter(bad_array[:,0], bad_array[:,1], c="r")
+plt.show()
