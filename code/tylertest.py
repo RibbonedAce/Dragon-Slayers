@@ -2,6 +2,7 @@ try:
     from malmo import MalmoPython
 except:
     import MalmoPython
+import malmo.minecraftbootstrap
 
 import os
 import sys
@@ -120,7 +121,7 @@ def set_yaw_and_pitch(agent, yaw=None, pitch=None):
             pitch_diff = pitch - current_pitch
 
         if abs(yaw_diff) < 0.001 and abs(pitch_diff) < 0.001:
-            break;
+            break
             
         yaw_multiplier = 1
         pitch_multiplier = 1
@@ -190,15 +191,11 @@ def get_first_vert_shot(distance):
     return lower_angle*(1-interp) + upper_angle*interp
 
 def get_next_vert_shot(prev_angle, error, step_size):
-    array = np.asarray(vert_shots[0] + vert_shots[1])
-    bound_angle = prev_angle
-    
+    bound_angle = prev_angle    
     if error < 0:
         bound_angle = 45
-        
     elif error > 0:
         bound_angle = 0
-    
     return prev_angle*(1-step_size) + bound_angle*step_size
 
 def get_first_hori_shot(angle):
@@ -220,15 +217,11 @@ def get_first_hori_shot(angle):
     return lower_angle*(1-interp) + upper_angle*interp
 
 def get_next_hori_shot(prev_angle, error, step_size):
-    array = np.asarray(hori_shots[0] + hori_shots[1])
     bound_angle = prev_angle
-    
     if error < 0:
         bound_angle = 180
-        
     elif error > 0:
         bound_angle = -180
-    
     return prev_angle*(1-step_size) + bound_angle*step_size
 
 def shoot_at_target():
@@ -303,6 +296,9 @@ def record_data():
 
 vert_shots = [[], []]
 hori_shots = [[], []]
+
+# Launch the clients
+malmo.minecraftbootstrap.launch_minecraft([10001, 10002])
 
 # Create default Malmo objects:
 shoot_agent = MalmoPython.AgentHost()
