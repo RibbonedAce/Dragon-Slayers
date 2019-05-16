@@ -15,6 +15,12 @@ from matplotlib import pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 
+wall_length = 8
+x_start = .5
+y_start = 4
+z_start = .5
+mover_pos = 0
+
 def GetMissionXML():
     params = get_mission_randoms()
     
@@ -33,17 +39,19 @@ def GetMissionXML():
                 </Time>
                 <Weather>clear</Weather>
               </ServerInitialConditions>
-              <ServerHandlers>
-                  <FlatWorldGenerator/>
+                <ServerHandlers>
+                  <FlatWorldGenerator></FlatWorldGenerator>
+                  <DrawingDecorator> 
+                    '''+generateWall()+'''
+                  </DrawingDecorator>
                   <ServerQuitFromTimeUp timeLimitMs="180000"/>
-                  <ServerQuitWhenAnyAgentFinishes/>
                 </ServerHandlers>
               </ServerSection>
 
               <AgentSection mode="Survival">
                 <Name>Slayer</Name>
                 <AgentStart>
-                    <Placement x="0.5" y="4.0" z="0.5" yaw="0"/>
+                    <Placement x="'''+str(x_start)+'''" y="'''+str(y_start)+'''" z="'''+str(z_start)+'''" yaw="0"/>
                     <Inventory>
                         <InventoryItem slot="0" type="bow"/>
                         <InventoryItem slot="1" type="arrow" quantity="64"/>
@@ -61,7 +69,7 @@ def GetMissionXML():
               <AgentSection mode="Survival">
                 <Name>Mover</Name>
                 <AgentStart>
-                    <Placement x="0.5" y="4.0" z="'''+params[1]+'''" yaw="180"/>
+                    '''+mover_pos+'''
                     <Inventory>
                         '''+fill_inventory()+'''
                     </Inventory>
@@ -69,7 +77,7 @@ def GetMissionXML():
                 <AgentHandlers>
                     <ContinuousMovementCommands turnSpeedDegs="900"/>
                     <ObservationFromNearbyEntities> 
-                        <Range name="Mobs" xrange="10000" yrange="1" zrange="10000" update_frequency="1"/>
+                        <Range name="Mobs" xrange="10000" yrange="10000" zrange="10000" update_frequency="1"/>
                     </ObservationFromNearbyEntities>
                     <ChatCommands/>
                 </AgentHandlers>
@@ -77,7 +85,48 @@ def GetMissionXML():
             </Mission>'''
 
 def get_mission_randoms():
-    return str(random.randrange(-20, 20)), str(random.randrange(20, 50))
+    return str(random.randrange(-40, 40)), str(random.randrange(-40, 40))
+
+def generateWall():
+    global mover_pos
+
+    # general wall specs for draw line
+    length = wall_length
+    half = length/2
+    x1 = int(x_start - half)
+    x2 = int(x_start + half -.5)
+    z = int(z_start + 12)
+
+    result = ""
+    # create front wall
+    for line_num in range(length):
+        y = y_start + line_num
+        z_bw = z+1 # z coordinate for the back wall
+        result += "<DrawLine x1=\""+str(x1)+"\" y1=\""+str(y)+"\" z1=\""+str(z)+ \
+                    "\" x2=\""+str(x2)+"\" y2=\""+str(y)+"\" z2=\""+str(z)+ \
+                    "\" type=\"dirt\"/>\n"
+        result += "<DrawLine x1=\""+str(x1)+"\" y1=\""+str(y)+"\" z1=\""+str(z_bw)+ \
+                    "\" x2=\""+str(x2)+"\" y2=\""+str(y)+"\" z2=\""+str(z_bw)+ \
+                    "\" type=\"dirt\"/>\n"
+
+    # create random hole values for the target
+    target_x = random.randint(x1+1,x2-1) # +1/-1 to keep from being on edge of wall
+    target_y1 = random.randint(5,2+length) # 5/2+ to keep from being on edge of wall
+    target_y2 = target_y1-1
+
+    # block 1
+    result += "<DrawLine x1=\""+str(target_x)+"\" y1=\""+str(target_y1)+"\" z1=\""+str(z)+ \
+                    "\" x2=\""+str(target_x)+"\" y2=\""+str(target_y1)+"\" z2=\""+str(z)+ \
+                    "\" type=\"air\"/>\n"
+    # block 2
+    result += "<DrawLine x1=\""+str(target_x)+"\" y1=\""+str(target_y2)+"\" z1=\""+str(z)+ \
+                    "\" x2=\""+str(target_x)+"\" y2=\""+str(target_y2)+"\" z2=\""+str(z)+ \
+                    "\" type=\"air\"/>\n"
+
+    mover_pos = "<Placement x=\""+str(target_x+.5)+"\" y=\""+str(target_y2)+"\" z=\""+str(z)+ \
+                    "\" yaw=\"180\"/>"
+    #print(result)
+    return result
 
 def fill_inventory():
     result = ""
@@ -134,7 +183,7 @@ def set_yaw_and_pitch(agent, yaw=None, pitch=None):
             
         yaw_sleep = abs(yaw_diff) / (i * 900)
         pitch_sleep = abs(pitch_diff) / (i * 900)
-        sleep_time = max(yaw_sleep, pitch_sleep)
+        sleep_time = max(yaw_sleep, pitch_sleep, 0.1)
         total_sleep += sleep_time
         
         agent.sendCommand("turn " + str(i * yaw_multiplier * yaw_sleep / sleep_time))
