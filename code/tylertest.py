@@ -15,11 +15,11 @@ from matplotlib import pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 
-wall_length = 8
+wall_length = 40
 x_start = .5
 y_start = 4
 z_start = .5
-mover_pos = 0
+mover_start = 0
 
 def GetMissionXML():
     params = get_mission_randoms()
@@ -69,7 +69,7 @@ def GetMissionXML():
               <AgentSection mode="Survival">
                 <Name>Mover</Name>
                 <AgentStart>
-                    '''+mover_pos+'''
+                    '''+mover_start+'''
                     <Inventory>
                         '''+fill_inventory()+'''
                     </Inventory>
@@ -88,7 +88,7 @@ def get_mission_randoms():
     return str(random.randrange(-40, 40)), str(random.randrange(-40, 40))
 
 def generateWall():
-    global mover_pos
+    global mover_start
 
     # general wall specs for draw line
     length = wall_length
@@ -123,7 +123,7 @@ def generateWall():
                     "\" x2=\""+str(target_x)+"\" y2=\""+str(target_y2)+"\" z2=\""+str(z)+ \
                     "\" type=\"air\"/>\n"
 
-    mover_pos = "<Placement x=\""+str(target_x+.5)+"\" y=\""+str(target_y2)+"\" z=\""+str(z)+ \
+    mover_start = "<Placement x=\""+str(target_x+.5)+"\" y=\""+str(target_y2)+"\" z=\""+str(z)+ \
                     "\" yaw=\"180\"/>"
     #print(result)
     return result
@@ -169,7 +169,7 @@ def set_yaw_and_pitch(agent, yaw=None, pitch=None):
         if pitch != None:
             pitch_diff = pitch - current_pitch
 
-        if abs(yaw_diff) < 0.001 and abs(pitch_diff) < 0.001:
+        if (abs(yaw_diff) < 0.001 and abs(pitch_diff) < 0.001) or total_sleep > 5:
             break
             
         yaw_multiplier = 1
@@ -183,7 +183,7 @@ def set_yaw_and_pitch(agent, yaw=None, pitch=None):
             
         yaw_sleep = abs(yaw_diff) / (i * 900)
         pitch_sleep = abs(pitch_diff) / (i * 900)
-        sleep_time = max(yaw_sleep, pitch_sleep, 0.1)
+        sleep_time = min(3.0, max(yaw_sleep, pitch_sleep, 0.1))
         total_sleep += sleep_time
         
         agent.sendCommand("turn " + str(i * yaw_multiplier * yaw_sleep / sleep_time))
@@ -216,33 +216,39 @@ def vert_distance(xtarget, ztarget, xsource=0, zsource=0):
 def get_hori_angle(xorigin, zorigin, xtarget, ztarget):
     return math.degrees(math.atan2(xorigin-xtarget, ztarget-zorigin))
 
-def get_first_vert_shot(distance):
+def get_first_vert_shot(distance, elevation):
     array = np.asarray(vert_shots[0] + vert_shots[1])
     if array.shape[0] > 5:
-        poly = PolynomialFeatures(2, include_bias=False).fit(array[:,0].reshape(-1, 1))
-        predictor = LinearRegression().fit(poly.transform(array[:,0].reshape(-1, 1)), array[:,1])
-        return predictor.predict(poly.transform(np.asarray([[distance]])))[0]
+        if elevation > distance:
+            array = array[array[:,1] > array[:,0]]
+        else:
+            array = array[array[:,1] <= array[:,0]]
+    if array.shape[0] > 5:
+        poly = PolynomialFeatures(2).fit(array[:,0].reshape(-1, 1))
+        predictor = LinearRegression().fit(np.concatenate((poly.transform(array[:,0].reshape(-1, 1)), array[:,1].reshape(-1, 1)), axis=1), array[:,-1])
+        return min(predictor.predict(np.concatenate((poly.transform(np.asarray([[distance]])), np.asarray([[elevation]])), axis=1))[0], 89.9)
     
     lower_bound = 0
     lower_angle = 0
     upper_bound = 1000
-    upper_angle = 45
+    upper_angle = 90
     
     for i in range(array.shape[0]):
-        if array[i,0] < distance and array[i,0] > lower_bound:
-            lower_bound = array[i,0]
-            lower_angle = array[i,1]
-        elif array[i,0] > distance and array[i,0] < upper_bound:
-            upper_bound = array[i,0]
-            upper_angle = array[i,1]
+        ratio = array[i,0] / array[i,1]
+        if ratio < distance / elevation and ratio > lower_bound:
+            lower_bound = ratio
+            lower_angle = array[i,-1]
+        elif ratio > distance / elevation and ratio < upper_bound:
+            upper_bound = ratio
+            upper_angle = array[i,-1]
 
-    interp = (distance - lower_bound) / (upper_bound - lower_bound)
+    interp = (distance / elevation - lower_bound) / (upper_bound - lower_bound)
     return lower_angle*(1-interp) + upper_angle*interp
 
 def get_next_vert_shot(prev_angle, error, step_size):
     bound_angle = prev_angle    
     if error < 0:
-        bound_angle = 45
+        bound_angle = 90
     elif error > 0:
         bound_angle = 0
     return prev_angle*(1-step_size) + bound_angle*step_size
@@ -253,8 +259,8 @@ def get_first_hori_shot(angle):
         predictor = LinearRegression().fit(array[:,0].reshape(-1, 1), array[:,1])
         return predictor.predict(np.asarray([[angle]]))[0]
     
-    lower_angle = -180
-    upper_angle = 180
+    lower_angle = -179
+    upper_angle = 179
     
     for i in range(array.shape[0]):
         if array[i,0] < angle and array[i,0] > lower_angle:
@@ -268,9 +274,9 @@ def get_first_hori_shot(angle):
 def get_next_hori_shot(prev_angle, error, step_size):
     bound_angle = prev_angle
     if error < 0:
-        bound_angle = 180
+        bound_angle = 179
     elif error > 0:
-        bound_angle = -180
+        bound_angle = -179
     return prev_angle*(1-step_size) + bound_angle*step_size
 
 def shoot_at_target():
@@ -279,25 +285,36 @@ def shoot_at_target():
     global total_time
     global commands
     global distance
+    global elevation
     global obs_angle
     global mover_pos
-    global step_size
+    global mover_life
+    global vert_step_size
+    global hori_step_size
     
     last_obs = load_grid(move_agent, world_state)
     player_loc = find_mob_by_name(last_obs["Mobs"], "Slayer")
     target_loc = find_mob_by_name(last_obs["Mobs"], "Mover")
     distance = vert_distance(target_loc["x"], target_loc["z"], player_loc["x"], player_loc["z"])
+    elevation = target_loc["y"] - player_loc["y"]
     obs_angle = get_hori_angle(player_loc["x"], player_loc["z"], target_loc["x"], target_loc["z"])
     vert_angle = 0
     hori_angle = 0
-    if total_time < 1 or len(hori_shots[0] + hori_shots[1]) > 5:
-        vert_angle = get_first_vert_shot(distance)
-        hori_angle = get_first_hori_shot(obs_angle)
-        mover_pos = target_loc["z"]
+    mover_pos = [target_loc["x"], target_loc["z"]]
+    mover_life = target_loc["life"]
+    
+    if total_time < 1 or len(vert_shots[0] + vert_shots[1]) > 5:
+        vert_angle = get_first_vert_shot(distance, elevation)
     else:
-        vert_angle = get_next_vert_shot(vert_angle, vert_error, step_size)
-        hori_angle = get_next_hori_shot(hori_angle, hori_error, step_size)
-        step_size *= 0.8
+        vert_angle = get_next_vert_shot(vert_angle, vert_error, vert_step_size)
+        vert_step_size *= 0.8
+        
+    if total_time < 1 or len(hori_shots[0] + hori_shots[1]) > 5:
+        hori_angle = get_first_hori_shot(obs_angle)
+    else:
+        hori_angle = get_next_hori_shot(hori_angle, hori_error, hori_step_size)
+        hori_step_size *= 0.8
+        
     total_time += set_yaw_and_pitch(shoot_agent, hori_angle, -vert_angle)
     commands.append((shoot_agent, "use 1", total_time + 0))
     commands.append((shoot_agent, "use 0", total_time + 1.3))
@@ -308,12 +325,7 @@ def record_data():
     global total_time
     global commands
     global mover_pos
-    
-    #last_obs = load_grid(shoot_agent, world_state)
-    #player = find_mob_by_name(last_obs["Mobs"], "Slayer")
-    #target = find_mob_by_name(last_obs["Mobs"], "Mover")
-
-    #set_yaw_and_pitch(shoot_agent, angle, None)
+    global mover_life
 
     last_obs = load_grid(move_agent, world_state)
     vert_error = 0
@@ -321,22 +333,24 @@ def record_data():
     arrow = find_mob_by_name(last_obs["Mobs"], "Arrow")
     target_loc = find_mob_by_name(last_obs["Mobs"], "Mover")
     if not arrow:
-        if [target_loc["x"], target_loc["z"]] != mover_pos:
-            vert_shots[0].append([distance, vert_angle])
+        if [target_loc["x"], target_loc["z"]] != mover_pos or target_loc["life"] != mover_life:
+            vert_shots[0].append([distance, elevation, vert_angle])
             hori_shots[0].append([obs_angle, hori_angle])
             mover_pos = [target_loc["x"], target_loc["z"]]
+            mover_life = target_loc["life"]
         else:
-            vert_error = 100
-            hori_error = 0
-    else:
+            vert_error = 0
+            hori_error = 180
+    elif arrow["y"] > 5:
         player_loc = find_mob_by_name(last_obs["Mobs"], "Slayer")
-        vert_error = vert_distance(arrow["x"], arrow["z"], player_loc["x"], player_loc["z"]) - \
-                     vert_distance(target_loc["x"], target_loc["z"], player_loc["x"], player_loc["z"])
-        hori_error = get_hori_angle(player_loc["x"], player_loc["z"], arrow["x"], arrow["z"]) - \
-                     get_hori_angle(player_loc["x"], player_loc["z"], target_loc["x"], target_loc["z"])
+        vert_error = arrow["y"] - target_loc["y"]
+        hori_error = get_hori_angle(player_loc["x"], player_loc["z"], arrow["x"], arrow["z"]) - get_hori_angle(player_loc["x"], player_loc["z"], target_loc["x"], target_loc["z"])
         hori_error = ((hori_error + 180) % 360) - 180
-        vert_shots[1].append([vert_distance(arrow["x"], arrow["z"], player_loc["x"], player_loc["z"]) - 2, vert_angle])
+        vert_shots[1].append([vert_distance(arrow["x"], arrow["z"], player_loc["x"], player_loc["z"]) - 1, arrow["y"] - player_loc["y"], vert_angle])
         hori_shots[1].append([get_hori_angle(player_loc["x"], player_loc["z"], arrow["x"], arrow["z"]), hori_angle])
+    else:
+        vert_error = -10
+        hori_error = 0
     print("Vert Error:", vert_error)
     print("Hori Error:", hori_error)
     commands.append((shoot_agent, "chat /kill @e[type=!player]", total_time + 0))
@@ -366,11 +380,6 @@ if shoot_agent.receivedArgument("help"):
 if move_agent.receivedArgument("help"):
     print(move_agent.getUsage())
     exit(0)
-
-directions = [(-1, -1), (-1, 0), (-1, 1), (-0.5, -0.5), (-0.5, 0), (-0.5, 0.5),
-              (-0.1, -0.1), (-0.1, 0), (-0.1, 0.1), (0, -1), (0, -0.5), (0, -0.1),
-              (0, 0.1), (0, 0.5), (0, 1), (0.1, -0.1), (0.1, 0), (0.1, 0.1),
-              (0.5, -0.5), (0.5, 0), (0.5, 0.5), (1, -1), (1, 0), (1, 1)]
 
 iterations = 3
 for i in range(iterations):
@@ -430,14 +439,17 @@ for i in range(iterations):
 
     # Loop until mission ends:
     shoot_cycle = 0
-    record_cycle = 10
+    record_cycle = 5
     total_time = 0
-    step_size = 1
+    vert_step_size = 1
+    hori_step_size = 1
     vert_error = 0
     hori_error = 0
     distance = 0
+    elevation = 0
     obs_angle = 0
     mover_pos = [0, 0]
+    mover_life = 10
     while world_state.is_mission_running:
         #sys.stdout.write(".")
         time.sleep(0.1)
@@ -445,11 +457,11 @@ for i in range(iterations):
         process_commands(total_time)
 
         if total_time >= shoot_cycle:
-            shoot_cycle += 11.3
+            shoot_cycle += 6.3
             shoot_at_target()
 
         if total_time >= record_cycle:
-            record_cycle += 11.3
+            record_cycle += 6.3
             reward = record_data()
 
         world_state = shoot_agent.getWorldState()
