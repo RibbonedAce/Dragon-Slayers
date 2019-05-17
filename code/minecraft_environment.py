@@ -32,7 +32,7 @@ def GetMissionXML():
                   <DrawingDecorator>
                     <DrawSphere x="-27" y="70" z="0" radius="30" type="air"/>
                   </DrawingDecorator>
-                  <ServerQuitFromTimeUp timeLimitMs="600000"/>
+                  <ServerQuitFromTimeUp timeLimitMs="13000"/>
                   <ServerQuitWhenAnyAgentFinishes/>
                 </ServerHandlers>
               </ServerSection>
@@ -47,7 +47,7 @@ def GetMissionXML():
                     </Inventory>
                 </AgentStart>
                 <AgentHandlers>
-                    <ContinuousMovementCommands turnSpeedDegs="900"/>
+                    <ContinuousMovementCommands turnSpeedDegs="100"/>
                     <MissionQuitCommands/>
                     <ObservationFromNearbyEntities> 
                         <Range name="Mobs" xrange="1000" yrange="1" zrange="1000" update_frequency="1"/>
@@ -88,7 +88,7 @@ BOW_DAMAGE = 10
 class MinecraftEnvironment(gym.Env):
     
     def __init__(self):
-        self.valid_targets = {"Zombie", "Spider", "Skeleton"}
+        self.valid_targets = {"Zombie", "Spider", "Skeleton", "Cow"}
         self.frame_width = 400
         self.frame_height = 250
         self.bow_charge_duration = 1.2
@@ -107,7 +107,7 @@ class MinecraftEnvironment(gym.Env):
         #get reward obtained from the last time step() is called
         self.reward_since_last_obs = 0
         #self.seed()
-        self.obs = None
+        self.world_state = None
         self.last_mob_healths = {}
         self.time = time.time()
         self.shoot_timer = 0
@@ -139,16 +139,15 @@ class MinecraftEnvironment(gym.Env):
         Enemies shouldn't be losing health outside of player's arrows hitting them
         '''
         assert self.action_space.contains(action)
-        self.obs = self.agent.getWorldState()
-        self.obs_dict = self.get_obs_dict(self.obs)
-        mob_healths = self.get_mob_healths(self.obs_dict,self.valid_targets)
+
+        self.world_state = self.agent.getWorldState()
         #get time since last step
         delta_time = int(round(time.time() * 1000)) - self.time
 
         #get pitch and yaw of new action
         pitch = self._action_set[action][0]
         yaw = self._action_set[action][1]
-        print("turn: " + str(yaw) + ", pitch: " + str(pitch))
+        #print("turn: " + str(yaw) + ", pitch: " + str(pitch))
 
         #set agent's turning rates
         self.agent.sendCommand("turn " + str(yaw))
@@ -156,18 +155,21 @@ class MinecraftEnvironment(gym.Env):
 
 
         #calculate reward since last step()
-        reward = self.calculate_reward(mob_healths,self.last_mob_healths)
-        print("reward: " + str(reward))
+        #self.world_sttate.num obs is frequently zero and it emptied whenever it isn't
+        reward = 0
+        if(self.world_state.number_of_observations_since_last_state > 0):
+            self.obs = self.get_obs(self.world_state)
+            mob_healths = self.get_mob_healths(self.obs,self.valid_targets)
+            reward = self.calculate_reward(mob_healths,self.last_mob_healths)
+            self.last_mob_healths = mob_healths
 
         #shoot loop
         self.shoot_timer += delta_time
-        print(self.shoot_timer)
         if(self.shoot_timer > 1.2*1000):
             #release RMB
             self.agent.sendCommand("use 0")
             self.shoot_timer = 0
             self.shot_count += 1
-            print("bow shoot")
         else:
             #hold RMB
             self.agent.sendCommand("use 1")
@@ -175,7 +177,6 @@ class MinecraftEnvironment(gym.Env):
 
         #update variables
         self.time = int(round(time.time() * 1000))
-        self.last_mob_healths = mob_healths
         self.mission_time += delta_time
 
         #Get screen pixels
@@ -204,10 +205,8 @@ class MinecraftEnvironment(gym.Env):
         max_retries = 3
 
         # Attempt to start a mission:
-        print("Starting mission...")
         for retry in range(max_retries):
             try:
-                print("try : " + str(retry))
                 self.agent.startMission( self.mission, self.clients, self.mission_record, 0, "iteration " + str(self.episode_index))
                 break
             except RuntimeError as e:
@@ -218,40 +217,41 @@ class MinecraftEnvironment(gym.Env):
                     time.sleep(2)
 
         # Loop until mission starts:
-        self.obs = self.agent.getWorldState()
-        print("Waiting for mission to start")
-        while not self.obs.has_mission_begun:
+        self.world_state = self.agent.getWorldState()
+        while not self.world_state.has_mission_begun:
             #sys.stdout.write(".")
             time.sleep(0.1)
-            self.obs = self.agent.getWorldState()
-            for error in self.obs.errors:
+            self.world_state = self.agent.getWorldState()
+            for error in self.world_state.errors:
                 print("Error:",error.text)
 
 
 
         self.agent.sendCommand("chat /kill @e[type=!player]")
         time.sleep(0.5)
-        self.agent.sendCommand("chat /summon spider ~0 ~0 ~10")
+        self.agent.sendCommand("chat /summon cow ~0 ~0 ~3")
+        self.agent.sendCommand("chat /summon cow ~0 ~0 ~-3")
+
         
 
         self.time = time.time()
         self.episode_index += 1
 
         screen_frame = self.get_frame()
+        self.world_state = self.agent.getWorldState()
         assert screen_frame is not None
-        print("reset finished")
 
         return screen_frame
 
-    def get_mob_healths(self, obs_dict, valid_targets):
+    def get_mob_healths(self, obs, valid_targets):
         '''
         Builds dict of <id, life> for enemies in valid_targets
         '''
-        if(obs_dict is None):
+        if(obs is None):
             return {}
         mob_health_dict = {}
-        for entity in obs_dict["Mobs"]:
-            if entity["name"] in valid_targets:
+        for entity in obs["Mobs"]:
+            if entity["name"] in valid_targets and int(entity["life"] > 0):
                 mob_health_dict[entity["id"]] = int(entity["life"])
         return mob_health_dict
 
@@ -265,7 +265,7 @@ class MinecraftEnvironment(gym.Env):
             succession will only count as one hit.  This should not be a problem because we are shooting a fully charged bow.
         '''
         damaged_enemies = 0
-
+        
         total_damage = 0 #this is not used, but it's a possible reward structure so might as well track it
         for id in last_mob_healths.keys():
             if id in current_mob_healths.keys() and current_mob_healths[id] < last_mob_healths[id]:
@@ -303,7 +303,7 @@ class MinecraftEnvironment(gym.Env):
         self.clients = MalmoPython.ClientPool()
         self.clients.add(MalmoPython.ClientInfo('127.0.0.1', 10000)) # add Minecraft machines here as available
 
-    def get_obs_dict(self,world_state):
+    def get_obs(self,world_state):
         if len(world_state.errors) > 0:
             raise AssertionError('Could not load grid.')
 
@@ -323,15 +323,14 @@ class MinecraftEnvironment(gym.Env):
         #If, by some chance, there is no video frame available, wait until it is available
         #Returning null for observation is kind of a fatal error for dqn
         while(screen_frame is None):
-            if self.obs.number_of_video_frames_since_last_state > 0:
-                time_stamped_frame = self.obs.video_frames[-1]
+            if self.world_state.number_of_video_frames_since_last_state > 0:
+                time_stamped_frame = self.world_state.video_frames[-1]
                 #Reshaped to the correct format for keras-rl
                 screen_frame = np.reshape(time_stamped_frame.pixels,(time_stamped_frame.height,time_stamped_frame.width,time_stamped_frame.channels))
-                print("got frame: " + str(screen_frame.shape))
             else:
-                print("waiting for frame")
+                #print("waiting for frame")
                 time.sleep(0.1)
-                self.obs = self.agent.getWorldState()
+                self.world_state = self.agent.getWorldState()
         return screen_frame
     
 
