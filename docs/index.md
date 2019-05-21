@@ -11,34 +11,11 @@ Reports:
 - [Status](status.html)
 - [Final](final.html)
 
-///////
-
-What's Markdown (`.md`)?
-
-Markdown is markup that lets you write hypertext (HTML) documents
-in easy-to-read and easy-to-write plain text.
-No angle brackets `<></>` required for
-paragraphs, lists, blockquotes, tables, etc.
-
-
-This is a paragraph (in Markdown). Some more
-text here.
-
-This is another paragraph.
-
-This is a list:
-
-- Orange
-- Apple
-- Blueberry
-
-$$x^2 = y^2$$
-
-
-Just getting started with Markdown?
-See the [HTML <-> Markdown Quick Reference (Cheat Sheet)][quickref].
-[quickref]: https://github.com/mundimark/quickrefs/blob/master/HTML.md
-
-///////
+Links that were helpful in understanding Deep Q-Learning (Deep Reinforcement Learning, DQN):
+- [An introduction to Deep Q-Learning: let’s play Doom](https://medium.freecodecamp.org/an-introduction-to-deep-q-learning-lets-play-doom-54d02d8017d8)
+- [Deep Q-Learning GitHub Repository](https://github.com/dennybritz/reinforcement-learning/tree/master/DQN)
+- [Using Keras and Deep Q-Network to Play FlappyBird](https://yanpanlau.github.io/2016/07/10/FlappyBird-Keras.html)
+- [Learning to Shoot in First Person Shooter Games by Stabilizing Actions and Clustering Rewards for Reinforcement Learning](https://arxiv.org/pdf/1806.05117.pdf)
+- [Human-level control through deep reinforcementlearning](https://www.readcube.com/articles/10.1038/nature14236)
 
 <img src="https://www.minecraft.net/content/dam/archive/1a8822ce99d6200ab78e51db203180e5-Roman%20dragon2.jpg" width="858" height="480">
