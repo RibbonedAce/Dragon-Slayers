@@ -3,7 +3,7 @@ layout: default
 title:  Home
 ---
 
-Source code: https://github.com/thetylerace13/Dragon-Slayers
+Source code: [(https://github.com/thetylerace13/Dragon-Slayers)]
 
 Reports:
 
@@ -11,10 +11,10 @@ Reports:
 - [Status](status.html)
 - [Final](final.html)
 
-Links that were helpful in understanding Deep Q-Learning (Deep Reinforcement Learning, DQN):
+Helpful links for understanding Deep Q-Learning (DQN, Deep Reinforcement Learning):
 - [An introduction to Deep Q-Learning: let’s play Doom](https://medium.freecodecamp.org/an-introduction-to-deep-q-learning-lets-play-doom-54d02d8017d8)
-- [Deep Q-Learning GitHub Repository](https://github.com/dennybritz/reinforcement-learning/tree/master/DQN)
 - [Using Keras and Deep Q-Network to Play FlappyBird](https://yanpanlau.github.io/2016/07/10/FlappyBird-Keras.html)
+- [Deep Q-Learning GitHub Repository](https://github.com/dennybritz/reinforcement-learning/tree/master/DQN)
 - [Learning to Shoot in First Person Shooter Games by Stabilizing Actions and Clustering Rewards for Reinforcement Learning](https://arxiv.org/pdf/1806.05117.pdf)
 - [Human-level control through deep reinforcementlearning](https://www.readcube.com/articles/10.1038/nature14236)
 
