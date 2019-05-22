@@ -15,15 +15,9 @@ from matplotlib import pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 
-wall_length = 40
-x_start = .5
-y_start = 4
-z_start = .5
-mover_start = 0
+params = (random.randint(-20, 20), random.randint(5, 20), random.randint(-20, 20))
 
 def GetMissionXML():
-    params = get_mission_randoms()
-    
     return '''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
             <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
@@ -41,9 +35,6 @@ def GetMissionXML():
               </ServerInitialConditions>
                 <ServerHandlers>
                   <FlatWorldGenerator></FlatWorldGenerator>
-                  <DrawingDecorator> 
-                    '''+generateWall()+'''
-                  </DrawingDecorator>
                   <ServerQuitFromTimeUp timeLimitMs="180000"/>
                 </ServerHandlers>
               </ServerSection>
@@ -51,7 +42,7 @@ def GetMissionXML():
               <AgentSection mode="Survival">
                 <Name>Slayer</Name>
                 <AgentStart>
-                    <Placement x="'''+str(x_start)+'''" y="'''+str(y_start)+'''" z="'''+str(z_start)+'''" yaw="0"/>
+                    <Placement x="0.5" y="4" z="0.5" yaw="0"/>
                     <Inventory>
                         <InventoryItem slot="0" type="bow"/>
                         <InventoryItem slot="1" type="arrow" quantity="64"/>
@@ -63,13 +54,14 @@ def GetMissionXML():
                         <Range name="Mobs" xrange="10000" yrange="1" zrange="10000" update_frequency="1"/>
                     </ObservationFromNearbyEntities>
                     <ChatCommands/>
+                    <InventoryCommands/>
                 </AgentHandlers>
               </AgentSection>
               
               <AgentSection mode="Survival">
                 <Name>Mover</Name>
                 <AgentStart>
-                    '''+mover_start+'''
+                    <Placement x="'''+str(params[0])+'''" y="4" z="'''+str(params[2])+'''" yaw="180"/>
                     <Inventory>
                         '''+fill_inventory()+'''
                     </Inventory>
@@ -83,50 +75,6 @@ def GetMissionXML():
                 </AgentHandlers>
               </AgentSection>
             </Mission>'''
-
-def get_mission_randoms():
-    return str(random.randrange(-40, 40)), str(random.randrange(-40, 40))
-
-def generateWall():
-    global mover_start
-
-    # general wall specs for draw line
-    length = wall_length
-    half = length/2
-    x1 = int(x_start - half)
-    x2 = int(x_start + half -.5)
-    z = int(z_start + 12)
-
-    result = ""
-    # create front wall
-    for line_num in range(length):
-        y = y_start + line_num
-        z_bw = z+1 # z coordinate for the back wall
-        result += "<DrawLine x1=\""+str(x1)+"\" y1=\""+str(y)+"\" z1=\""+str(z)+ \
-                    "\" x2=\""+str(x2)+"\" y2=\""+str(y)+"\" z2=\""+str(z)+ \
-                    "\" type=\"dirt\"/>\n"
-        result += "<DrawLine x1=\""+str(x1)+"\" y1=\""+str(y)+"\" z1=\""+str(z_bw)+ \
-                    "\" x2=\""+str(x2)+"\" y2=\""+str(y)+"\" z2=\""+str(z_bw)+ \
-                    "\" type=\"dirt\"/>\n"
-
-    # create random hole values for the target
-    target_x = random.randint(x1+1,x2-1) # +1/-1 to keep from being on edge of wall
-    target_y1 = random.randint(5,2+length) # 5/2+ to keep from being on edge of wall
-    target_y2 = target_y1-1
-
-    # block 1
-    result += "<DrawLine x1=\""+str(target_x)+"\" y1=\""+str(target_y1)+"\" z1=\""+str(z)+ \
-                    "\" x2=\""+str(target_x)+"\" y2=\""+str(target_y1)+"\" z2=\""+str(z)+ \
-                    "\" type=\"air\"/>\n"
-    # block 2
-    result += "<DrawLine x1=\""+str(target_x)+"\" y1=\""+str(target_y2)+"\" z1=\""+str(z)+ \
-                    "\" x2=\""+str(target_x)+"\" y2=\""+str(target_y2)+"\" z2=\""+str(z)+ \
-                    "\" type=\"air\"/>\n"
-
-    mover_start = "<Placement x=\""+str(target_x+.5)+"\" y=\""+str(target_y2)+"\" z=\""+str(z)+ \
-                    "\" yaw=\"180\"/>"
-    #print(result)
-    return result
 
 def fill_inventory():
     result = ""
@@ -216,6 +164,51 @@ def vert_distance(xtarget, ztarget, xsource=0, zsource=0):
 def get_hori_angle(xorigin, zorigin, xtarget, ztarget):
     return math.degrees(math.atan2(xorigin-xtarget, ztarget-zorigin))
 
+def magnitude(vector):
+    return np.sqrt(np.sum(vector**2))
+
+def get_angle_between(vector1, vector2):
+    prod = np.dot(vector1, vector2)
+    mag1 = np.sqrt(np.sum(vector1**2))
+    mag2 = np.sqrt(np.sum(vector2**2))
+    if mag1 == 0 or mag2 == 0:
+        return 0
+    return math.degrees(math.acos(prod/(mag1*mag2)))
+
+def get_closest_point(curve, target):
+    if len(curve) == 0:
+        print("Got closest point with empty list")
+        return None
+    if len(curve) == 1:
+        return curve[0]
+    
+    point1, point2 = None, None
+    dist1, dist2 = 9999, 9999
+    for i in range(len(curve)):
+        dist = magnitude(curve[i] - target)
+        if dist < dist1:
+            dist2 = dist1
+            point2 = point1
+            dist1 = dist
+            point1 = curve[i]
+        elif dist < dist2:
+            dist2 = dist
+            point2 = curve[i]
+
+    if magnitude(point2 - point1) == 0:
+        return point1
+    
+    angle1 = get_angle_between(point2 - point1, target - point1)
+    if angle1 > 90:
+        return point1
+    if get_angle_between(point1 - point2, target - point2) > 90:
+        return point2
+    angle2 = 180 - 90 - angle1
+    side = dist1 * math.sin(math.radians(angle2)) / math.sin(math.radians(90))
+    interp = side / magnitude(point2 - point1)
+    
+    return point1 * interp + point2 * (1 - interp)
+
 def get_first_vert_shot(distance, elevation):
     array = np.asarray(vert_shots[0] + vert_shots[1])
     if array.shape[0] > 5:
@@ -224,9 +217,9 @@ def get_first_vert_shot(distance, elevation):
         else:
             array = array[array[:,1] <= array[:,0]]
     if array.shape[0] > 5:
-        poly = PolynomialFeatures(2).fit(array[:,0].reshape(-1, 1))
-        predictor = LinearRegression().fit(np.concatenate((poly.transform(array[:,0].reshape(-1, 1)), array[:,1].reshape(-1, 1)), axis=1), array[:,-1])
-        return min(predictor.predict(np.concatenate((poly.transform(np.asarray([[distance]])), np.asarray([[elevation]])), axis=1))[0], 89.9)
+        predictor = LinearRegression().fit(array[:,:-1], array[:,-1])
+        print(predictor.coef_)
+        return min(predictor.predict([[distance, elevation]])[0], 89.9)
     
     lower_bound = 0
     lower_angle = 0
@@ -272,12 +265,8 @@ def get_first_hori_shot(angle):
     return lower_angle*(1-interp) + upper_angle*interp
 
 def get_next_hori_shot(prev_angle, error, step_size):
-    bound_angle = prev_angle
-    if error < 0:
-        bound_angle = 179
-    elif error > 0:
-        bound_angle = -179
-    return prev_angle*(1-step_size) + bound_angle*step_size
+    result = prev_angle - error
+    return ((result + 180) % 360) - 180
 
 def shoot_at_target():
     global vert_angle
@@ -298,26 +287,24 @@ def shoot_at_target():
     distance = vert_distance(target_loc["x"], target_loc["z"], player_loc["x"], player_loc["z"])
     elevation = target_loc["y"] - player_loc["y"]
     obs_angle = get_hori_angle(player_loc["x"], player_loc["z"], target_loc["x"], target_loc["z"])
-    vert_angle = 0
-    hori_angle = 0
     mover_pos = [target_loc["x"], target_loc["z"]]
     mover_life = target_loc["life"]
     
-    if total_time < 1 or len(vert_shots[0] + vert_shots[1]) > 5:
+    if total_time < 30 or len(vert_shots[0] + vert_shots[1]) > 5:
         vert_angle = get_first_vert_shot(distance, elevation)
     else:
         vert_angle = get_next_vert_shot(vert_angle, vert_error, vert_step_size)
         vert_step_size *= 0.8
         
-    if total_time < 1 or len(hori_shots[0] + hori_shots[1]) > 5:
+    if total_time < 30 or len(hori_shots[0] + hori_shots[1]) > 5:
         hori_angle = get_first_hori_shot(obs_angle)
     else:
         hori_angle = get_next_hori_shot(hori_angle, hori_error, hori_step_size)
         hori_step_size *= 0.8
         
-    total_time += set_yaw_and_pitch(shoot_agent, hori_angle, -vert_angle)
+    set_yaw_and_pitch(shoot_agent, hori_angle, -vert_angle)
     commands.append((shoot_agent, "use 1", total_time + 0))
-    commands.append((shoot_agent, "use 0", total_time + 1.3))
+    commands.append((shoot_agent, "use 0", total_time + 26))
 
 def record_data():
     global vert_error
@@ -327,33 +314,35 @@ def record_data():
     global mover_pos
     global mover_life
 
-    last_obs = load_grid(move_agent, world_state)
-    vert_error = 0
+    curr_time = 0
+    data = []
+    while curr_time < 50:
+        curr_time += 1
+        time.sleep(0.05)
+        last_obs = load_grid(move_agent, world_state)
+        arrow = find_mob_by_name(last_obs["Mobs"], "Arrow")
+        if arrow:
+            data.append(np.asarray([arrow["x"], arrow["y"], arrow["z"]]))
+
+    vert_error = 10
     hori_error = 0
-    arrow = find_mob_by_name(last_obs["Mobs"], "Arrow")
-    target_loc = find_mob_by_name(last_obs["Mobs"], "Mover")
-    if not arrow:
-        if [target_loc["x"], target_loc["z"]] != mover_pos or target_loc["life"] != mover_life:
-            vert_shots[0].append([distance, elevation, vert_angle])
-            hori_shots[0].append([obs_angle, hori_angle])
-            mover_pos = [target_loc["x"], target_loc["z"]]
-            mover_life = target_loc["life"]
-        else:
-            vert_error = 0
-            hori_error = 180
-    elif arrow["y"] > 5:
+    if len(data) > 0:
+        target_loc = find_mob_by_name(last_obs["Mobs"], "Mover")
+        target_loc = np.asarray([target_loc["x"], target_loc["y"], target_loc["z"]])
         player_loc = find_mob_by_name(last_obs["Mobs"], "Slayer")
-        vert_error = arrow["y"] - target_loc["y"]
-        hori_error = get_hori_angle(player_loc["x"], player_loc["z"], arrow["x"], arrow["z"]) - get_hori_angle(player_loc["x"], player_loc["z"], target_loc["x"], target_loc["z"])
+        closest_point = get_closest_point(data, target_loc)
+        for i in range(len(data)):
+            if (i == 0 or not np.array_equal(data[i], data[i-1])) and magnitude(data[i] - target_loc) < magnitude(data[i] - np.asarray([player_loc["x"], player_loc["y"], player_loc["z"]])):
+                vert_shots[1].append([magnitude(data[i][0:2:2] - target_loc[0:2:2]), data[i][1] - player_loc["y"], vert_angle])
+                hori_shots[1].append([get_hori_angle(player_loc["x"], player_loc["z"], data[i][0], data[i][2]), hori_angle])
+        vert_error = closest_point[1] - target_loc[1]
+        hori_error = get_hori_angle(player_loc["x"], player_loc["z"], closest_point[0], closest_point[2]) - \
+                     get_hori_angle(player_loc["x"], player_loc["z"], target_loc[0], target_loc[2])
         hori_error = ((hori_error + 180) % 360) - 180
-        vert_shots[1].append([vert_distance(arrow["x"], arrow["z"], player_loc["x"], player_loc["z"]) - 1, arrow["y"] - player_loc["y"], vert_angle])
-        hori_shots[1].append([get_hori_angle(player_loc["x"], player_loc["z"], arrow["x"], arrow["z"]), hori_angle])
-    else:
-        vert_error = -10
-        hori_error = 0
-    print("Vert Error:", vert_error)
-    print("Hori Error:", hori_error)
-    commands.append((shoot_agent, "chat /kill @e[type=!player]", total_time + 0))
+
+        print("Vert Error:", vert_error)
+        print("Hori Error:", hori_error)
+        commands.append((shoot_agent, "chat /kill @e[type=!player]", total_time + 0))
 
     return -((vert_error**2 + hori_error**2)**0.5)
 
@@ -432,17 +421,21 @@ for i in range(iterations):
     commands.append((shoot_agent, "chat /kill @e[type=!player]", 0))
     commands.append((shoot_agent, "hotbar.1 1", 0))
     commands.append((shoot_agent, "hotbar.1 0", 0))
+    commands.append((move_agent, "chat /gamemode 3", 0))
+    commands.append((move_agent, "jump 1", 0))
+    commands.append((move_agent, "jump 0", params[1]))
+    commands.append((move_agent, "chat /gamemode 1", params[1]))
 
     #for i in range(0,10,2):
         #commands.append((move_agent, "strafe 1", i))
         #commands.append((move_agent, "strafe -1", i+1))
 
     # Loop until mission ends:
-    shoot_cycle = 0
-    record_cycle = 5
+    shoot_cycle = 20
+    record_cycle = 46
     total_time = 0
-    vert_step_size = 1
-    hori_step_size = 1
+    vert_step_size = 0.5
+    hori_step_size = 0.5
     vert_error = 0
     hori_error = 0
     distance = 0
@@ -452,19 +445,17 @@ for i in range(iterations):
     mover_life = 10
     while world_state.is_mission_running:
         #sys.stdout.write(".")
-        time.sleep(0.1)
-        total_time += 0.1
+        time.sleep(0.05)
+        total_time += 1
         process_commands(total_time)
 
         if total_time >= shoot_cycle:
-            shoot_cycle += 6.3
+            shoot_cycle += 30
             shoot_at_target()
 
         if total_time >= record_cycle:
-            record_cycle += 6.3
+            record_cycle += 30
             reward = record_data()
-
-        world_state = shoot_agent.getWorldState()
 
     print()
     print("Mission ended")

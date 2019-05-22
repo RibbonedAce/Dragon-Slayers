@@ -339,7 +339,6 @@ def record_data(record_time):
         if arrow and (len(data) == 0 or (arrow["x"], arrow["y"], arrow["z"]) != data[-1]):
             data.append((arrow["x"], arrow["y"], arrow["z"]))
 
-    print(data)
     commands.append((shoot_agent, "chat /kill @e[type=!player]", total_time + 0))
     return -((vert_error**2 + hori_error**2)**0.5)
 
