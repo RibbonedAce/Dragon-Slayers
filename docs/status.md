@@ -17,5 +17,5 @@ Currently, our agent could essentially only fight an army of scarecrows, albeit 
 - [Matplotlib](https://matplotlib.org/)
 - [NumPy](https://www.numpy.org/)
 - [SciKit-Learn](https://scikit-learn.org/stable/)
-- - Linear Regression
-- - Polynomial Features
+  - Linear Regression
+  - Polynomial Features
