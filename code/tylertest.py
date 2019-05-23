@@ -15,8 +15,6 @@ from matplotlib import pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 
-params = (random.randint(-20, 20), random.randint(5, 20), random.randint(-20, 20))
-
 def GetMissionXML():
     return '''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
             <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
@@ -35,7 +33,7 @@ def GetMissionXML():
               </ServerInitialConditions>
                 <ServerHandlers>
                   <FlatWorldGenerator></FlatWorldGenerator>
-                  <ServerQuitFromTimeUp timeLimitMs="180000"/>
+                  <ServerQuitFromTimeUp timeLimitMs="60000"/>
                 </ServerHandlers>
               </ServerSection>
 
@@ -82,14 +80,18 @@ def fill_inventory():
         result += "<InventoryItem slot=\"" + str(i) + "\" type=\"bow\" quantity=\"1\"/>\n"
     return result
 
-def load_grid(agent, world_state):
+def load_grid(agent):
+    global world_state
+    
     wait_time = 0
 
     while wait_time < 10:
         #sys.stdout.write(".")
-        time.sleep(0.1)
-        wait_time += 0.1
+        time.sleep(0.05)
+        wait_time += 0.05
         world_state = agent.getWorldState()
+        if not world_state.is_mission_running:
+            return None
         if len(world_state.errors) > 0:
             raise AssertionError('Could not load grid.')
 
@@ -105,7 +107,9 @@ def set_yaw_and_pitch(agent, yaw=None, pitch=None):
     total_sleep = 0
     
     while True:
-        obs = load_grid(agent, world_state)
+        obs = load_grid(agent)
+        if not obs:
+            return total_sleep
         stats = find_mob_by_name(obs["Mobs"], "Slayer")
         current_yaw = stats["yaw"]
         current_pitch = stats["pitch"]
@@ -211,32 +215,19 @@ def get_closest_point(curve, target):
 
 def get_first_vert_shot(distance, elevation):
     array = np.asarray(vert_shots[0] + vert_shots[1])
-    if array.shape[0] > 5:
+    if array.shape[0] > 100:
         if elevation > distance:
-            array = array[array[:,1] > array[:,0]]
+            array = array[array[:,-1] > 45]
         else:
-            array = array[array[:,1] <= array[:,0]]
-    if array.shape[0] > 5:
-        predictor = LinearRegression().fit(array[:,:-1], array[:,-1])
-        print(predictor.coef_)
-        return min(predictor.predict([[distance, elevation]])[0], 89.9)
+            array = array[array[:,-1] <= 45]
+    if array.shape[0] > 100:
+        poly = PolynomialFeatures(2, include_bias=False).fit(array[:,:-1])
+        predictor = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,-1])
+        print(predictor.intercept_, predictor.coef_)
+        print(distance, elevation)
+        return min(predictor.predict(poly.transform([[distance, elevation]]))[0], 89.9)
     
-    lower_bound = 0
-    lower_angle = 0
-    upper_bound = 1000
-    upper_angle = 90
-    
-    for i in range(array.shape[0]):
-        ratio = array[i,0] / array[i,1]
-        if ratio < distance / elevation and ratio > lower_bound:
-            lower_bound = ratio
-            lower_angle = array[i,-1]
-        elif ratio > distance / elevation and ratio < upper_bound:
-            upper_bound = ratio
-            upper_angle = array[i,-1]
-
-    interp = (distance / elevation - lower_bound) / (upper_bound - lower_bound)
-    return lower_angle*(1-interp) + upper_angle*interp
+    return random.randrange(0, 45)
 
 def get_next_vert_shot(prev_angle, error, step_size):
     bound_angle = prev_angle    
@@ -248,21 +239,11 @@ def get_next_vert_shot(prev_angle, error, step_size):
 
 def get_first_hori_shot(angle):
     array = np.asarray(hori_shots[0] + hori_shots[1])
-    if array.shape[0] > 5:
+    if array.shape[0] > 100:
         predictor = LinearRegression().fit(array[:,0].reshape(-1, 1), array[:,1])
         return predictor.predict(np.asarray([[angle]]))[0]
     
-    lower_angle = -179
-    upper_angle = 179
-    
-    for i in range(array.shape[0]):
-        if array[i,0] < angle and array[i,0] > lower_angle:
-            lower_angle = array[i,1]
-        elif array[i,0] > angle and array[i,0] < upper_angle:
-            upper_angle = array[i,1]
-
-    interp = (angle - lower_angle) / (upper_angle - lower_angle)
-    return lower_angle*(1-interp) + upper_angle*interp
+    return random.randrange(-180, 180)
 
 def get_next_hori_shot(prev_angle, error, step_size):
     result = prev_angle - error
@@ -281,7 +262,9 @@ def shoot_at_target():
     global vert_step_size
     global hori_step_size
     
-    last_obs = load_grid(move_agent, world_state)
+    last_obs = load_grid(move_agent)
+    if not last_obs:
+        return
     player_loc = find_mob_by_name(last_obs["Mobs"], "Slayer")
     target_loc = find_mob_by_name(last_obs["Mobs"], "Mover")
     distance = vert_distance(target_loc["x"], target_loc["z"], player_loc["x"], player_loc["z"])
@@ -291,7 +274,7 @@ def shoot_at_target():
     mover_life = target_loc["life"]
     
     if total_time < 30 or len(vert_shots[0] + vert_shots[1]) > 5:
-        vert_angle = get_first_vert_shot(distance, elevation)
+        vert_angle = get_first_vert_shot(distance, elevation+1)
     else:
         vert_angle = get_next_vert_shot(vert_angle, vert_error, vert_step_size)
         vert_step_size *= 0.8
@@ -319,7 +302,9 @@ def record_data():
     while curr_time < 50:
         curr_time += 1
         time.sleep(0.05)
-        last_obs = load_grid(move_agent, world_state)
+        last_obs = load_grid(move_agent)
+        if not last_obs:
+            return
         arrow = find_mob_by_name(last_obs["Mobs"], "Arrow")
         if arrow:
             data.append(np.asarray([arrow["x"], arrow["y"], arrow["z"]]))
@@ -332,9 +317,11 @@ def record_data():
         player_loc = find_mob_by_name(last_obs["Mobs"], "Slayer")
         closest_point = get_closest_point(data, target_loc)
         for i in range(len(data)):
-            if (i == 0 or not np.array_equal(data[i], data[i-1])) and magnitude(data[i] - target_loc) < magnitude(data[i] - np.asarray([player_loc["x"], player_loc["y"], player_loc["z"]])):
-                vert_shots[1].append([magnitude(data[i][0:2:2] - target_loc[0:2:2]), data[i][1] - player_loc["y"], vert_angle])
+            if vert_angle < 85 and (i == 0 or not np.array_equal(data[i], data[i-1])):
+                vert_shots[1].append([magnitude(data[i][0:2:2] - np.asarray([player_loc["x"], player_loc["z"]])), data[i][1] - player_loc["y"], vert_angle])
                 hori_shots[1].append([get_hori_angle(player_loc["x"], player_loc["z"], data[i][0], data[i][2]), hori_angle])
+            if i > 1 and get_angle_between(data[i] - data[i-1], data[i-1] - data[i-2]) > 45:
+                break
         vert_error = closest_point[1] - target_loc[1]
         hori_error = get_hori_angle(player_loc["x"], player_loc["z"], closest_point[0], closest_point[2]) - \
                      get_hori_angle(player_loc["x"], player_loc["z"], target_loc[0], target_loc[2])
@@ -372,6 +359,7 @@ if move_agent.receivedArgument("help"):
 
 iterations = 3
 for i in range(iterations):
+    params = (random.randint(10, 30)*random.randrange(-1, 2, 2), random.randint(10, 20), random.randint(10, 30)*random.randrange(-1, 2, 2))
     my_mission = MalmoPython.MissionSpec(GetMissionXML(), True)
     my_mission_record = MalmoPython.MissionRecordSpec()
     my_mission.setViewpoint(0)
@@ -461,6 +449,7 @@ for i in range(iterations):
     print("Mission ended")
     # Mission has ended.
 
+print(vert_shots[1])
 '''good_array = np.asarray(shots[0])
 bad_array = np.asarray(shots[1])
 total_array = np.asarray(shots[0] + shots[1])
