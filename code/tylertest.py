@@ -214,20 +214,23 @@ def get_closest_point(curve, target):
     return point1 * interp + point2 * (1 - interp)
 
 def get_first_vert_shot(distance, elevation):
+    global vert_angle_step
+    
     array = np.asarray(vert_shots[0] + vert_shots[1])
     if array.shape[0] > 100:
         if elevation > distance:
             array = array[array[:,-1] > 45]
         else:
             array = array[array[:,-1] <= 45]
-    if array.shape[0] > 100:
+    if vert_angle_step >= 45:
         poly = PolynomialFeatures(2, include_bias=False).fit(array[:,:-1])
         predictor = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,-1])
         print(predictor.intercept_, predictor.coef_)
         print(distance, elevation)
         return min(predictor.predict(poly.transform([[distance, elevation]]))[0], 89.9)
-    
-    return random.randrange(0, 45)
+
+    vert_angle_step += 3
+    return vert_angle_step
 
 def get_next_vert_shot(prev_angle, error, step_size):
     bound_angle = prev_angle    
@@ -318,7 +321,7 @@ def record_data():
         closest_point = get_closest_point(data, target_loc)
         for i in range(len(data)):
             if vert_angle < 85 and (i == 0 or not np.array_equal(data[i], data[i-1])):
-                vert_shots[1].append([magnitude(data[i][0:2:2] - np.asarray([player_loc["x"], player_loc["z"]])), data[i][1] - player_loc["y"], vert_angle])
+                vert_shots[1].append([magnitude(data[i][::2] - np.asarray([player_loc["x"], player_loc["z"]])), data[i][1] - player_loc["y"], vert_angle])
                 hori_shots[1].append([get_hori_angle(player_loc["x"], player_loc["z"], data[i][0], data[i][2]), hori_angle])
             if i > 1 and get_angle_between(data[i] - data[i-1], data[i-1] - data[i-2]) > 45:
                 break
@@ -335,6 +338,7 @@ def record_data():
 
 vert_shots = [[], []]
 hori_shots = [[], []]
+vert_angle_step = -3
 
 # Launch the clients
 malmo.minecraftbootstrap.launch_minecraft([10001, 10002])
@@ -357,7 +361,7 @@ if move_agent.receivedArgument("help"):
     print(move_agent.getUsage())
     exit(0)
 
-iterations = 3
+iterations = 5
 for i in range(iterations):
     params = (random.randint(10, 30)*random.randrange(-1, 2, 2), random.randint(10, 20), random.randint(10, 30)*random.randrange(-1, 2, 2))
     my_mission = MalmoPython.MissionSpec(GetMissionXML(), True)
@@ -449,14 +453,30 @@ for i in range(iterations):
     print("Mission ended")
     # Mission has ended.
 
-print(vert_shots[1])
-'''good_array = np.asarray(shots[0])
-bad_array = np.asarray(shots[1])
-total_array = np.asarray(shots[0] + shots[1])
-poly = PolynomialFeatures(2, include_bias=False).fit(total_array[:,0].reshape(-1, 1))
-predictor = LinearRegression().fit(poly.transform(total_array[:,0].reshape(-1, 1)), total_array[:,1])
-x = np.linspace(0, total_array[:,0].max(), 1000).reshape(-1, 1)
-plt.plot(x, predictor.predict(poly.transform(x)))
-plt.scatter(good_array[:,0], good_array[:,1], c="g")
-plt.scatter(bad_array[:,0], bad_array[:,1], c="r")
-plt.show()'''
+array = np.asarray(vert_shots[0] + vert_shots[1])
+colors = [(min(max(0, 2 - 4*s/45), 1), \
+           min(max(0, 2 - abs((4*s-90)/45)), 1), \
+           min(max(0, 4*s/45 - 2), 1)) for s in array[:,2]]
+plt.scatter(array[:,0], array[:,1], c=colors, alpha=0.5)
+plt.title("Vertical Angle Regression Data")
+plt.xlabel("Distance")
+plt.ylabel("Elevation")
+plt.show()
+
+poly = PolynomialFeatures(2, include_bias=False).fit(array[:,:-1])
+predictor = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,-1])
+xSpace = np.linspace(0, array[:,0].max(), 100)
+ySpace = np.linspace(0, array[:,1].max(), 100)
+xx, yy = np.meshgrid(xSpace, ySpace)
+zz = np.zeros(xx.shape)
+for i in range(xx.shape[0]):
+    for j in range(xx.shape[1]):
+        zz[i][j] = predictor.predict(poly.transform([xx[i,j], yy[i,j]]))[0]
+zz.reshape(xx.shape)
+cs = plt.contourf(xx, yy, zz, levels=[5*i for i in range(10)])
+cbar = plt.colorbar(cs)
+cbar.ax.set_ylabel("Vertical angle")
+plt.title("Vertical Angle Regression Predictions")
+plt.xlabel("Distance")
+plt.ylabel("Elevation")
+plt.show()
