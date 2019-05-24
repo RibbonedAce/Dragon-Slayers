@@ -471,7 +471,7 @@ xx, yy = np.meshgrid(xSpace, ySpace)
 zz = np.zeros(xx.shape)
 for i in range(xx.shape[0]):
     for j in range(xx.shape[1]):
-        zz[i][j] = predictor.predict(poly.transform([xx[i,j], yy[i,j]]))[0]
+        zz[i][j] = predictor.predict(poly.transform([[xx[i,j], yy[i,j]]]))[0]
 zz.reshape(xx.shape)
 cs = plt.contourf(xx, yy, zz, levels=[5*i for i in range(10)])
 cbar = plt.colorbar(cs)
