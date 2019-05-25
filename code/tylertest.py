@@ -312,7 +312,7 @@ def record_data():
         if arrow:
             data.append(np.asarray([arrow["x"], arrow["y"], arrow["z"]]))
 
-    vert_error = 10
+    vert_error = 0
     hori_error = 0
     if len(data) > 0:
         target_loc = find_mob_by_name(last_obs["Mobs"], "Mover")
@@ -330,14 +330,16 @@ def record_data():
                      get_hori_angle(player_loc["x"], player_loc["z"], target_loc[0], target_loc[2])
         hori_error = ((hori_error + 180) % 360) - 180
 
-        print("Vert Error:", vert_error)
-        print("Hori Error:", hori_error)
+        vert_errors.append(vert_error)
+        hori_errors.append(hori_error)
         commands.append((shoot_agent, "chat /kill @e[type=!player]", total_time + 0))
 
     return -((vert_error**2 + hori_error**2)**0.5)
 
 vert_shots = [[], []]
 hori_shots = [[], []]
+vert_errors = []
+hori_errors = []
 vert_angle_step = -3
 
 # Launch the clients
@@ -363,7 +365,7 @@ if move_agent.receivedArgument("help"):
 
 iterations = 5
 for i in range(iterations):
-    params = (random.randint(10, 30)*random.randrange(-1, 2, 2), random.randint(10, 20), random.randint(10, 30)*random.randrange(-1, 2, 2))
+    params = (random.randint(10, 50)*random.randrange(-1, 2, 2), random.randint(10, 30), random.randint(10, 50)*random.randrange(-1, 2, 2))
     my_mission = MalmoPython.MissionSpec(GetMissionXML(), True)
     my_mission_record = MalmoPython.MissionRecordSpec()
     my_mission.setViewpoint(0)
@@ -453,6 +455,7 @@ for i in range(iterations):
     print("Mission ended")
     # Mission has ended.
 
+# Data Graphing
 array = np.asarray(vert_shots[0] + vert_shots[1])
 colors = [(min(max(0, 2 - 4*s/45), 1), \
            min(max(0, 2 - abs((4*s-90)/45)), 1), \
@@ -463,6 +466,7 @@ plt.xlabel("Distance")
 plt.ylabel("Elevation")
 plt.show()
 
+# Prediction Graphing
 poly = PolynomialFeatures(2, include_bias=False).fit(array[:,:-1])
 predictor = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,-1])
 xSpace = np.linspace(0, array[:,0].max(), 100)
@@ -479,4 +483,23 @@ cbar.ax.set_ylabel("Vertical angle")
 plt.title("Vertical Angle Regression Predictions")
 plt.xlabel("Distance")
 plt.ylabel("Elevation")
+plt.show()
+
+# Error Graphing
+total_errors = (np.asarray(vert_errors)**2 + np.asarray(hori_errors)**2)**0.5
+plt.scatter(range(total_errors.shape[0]), total_errors)
+plt.title("Errors for each shot")
+plt.xlabel("Arrow shot")
+plt.ylabel("Error")
+plt.show()
+
+# Accuracy Graphing
+accuracies = []
+for i in range(5, len(total_errors)):
+    shots = total_errors[i-5:i]
+    hit_shots = shots[shots<2]
+    accuracies.append(len(hit_shots) / len(shots))
+plt.plot(np.arange(5, len(total_errors)), accuracies)
+plt.title("Accuracy over last 5 shots")
+plt.xlabel("Last shot")
 plt.show()
