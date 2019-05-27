@@ -95,6 +95,7 @@ def get_closest_point(curve, target):
     return point1 * interp + point2 * (1 - interp)
 
 def get_first_vert_shot(distance, elevation):
+    global vert_angle_step
     
     array = np.asarray(vert_shots[0] + vert_shots[1])
     if array.shape[0] > 100:
@@ -102,14 +103,13 @@ def get_first_vert_shot(distance, elevation):
             array = array[array[:,-1] > 45]
         else:
             array = array[array[:,-1] <= 45]
-    if array.shape[0] > 100:
+    if vert_angle_step >= 45:
         poly = PolynomialFeatures(2, include_bias=False).fit(array[:,:-1])
         predictor = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,-1])
-        print(predictor.intercept_, predictor.coef_)
-        print(distance, elevation)
         return min(predictor.predict(poly.transform([[distance, elevation]]))[0], 89.9)
-    
-    return random.randrange(0, 45)
+
+    vert_angle_step += 3
+    return vert_angle_step
 
 
 def get_next_vert_shot(prev_angle, error, step_size):
@@ -149,8 +149,9 @@ class MalmoAgent():
         self.desired_yaw = yaw
         self.vert_shots = [[], []]
         self.hori_shots = [[], []]
-        self.self.hori_error = 0
-        self.self.vert_error = 0
+        self.hori_errors = []
+        self.vert_errors = []
+        self.vert_angle_step = 0
 
     def step(self, obs):
         #Run this once a tick
@@ -247,6 +248,7 @@ class MalmoAgent():
         
         if self.total_time < 30 or len(self.vert_shots[0] + self.vert_shots[1]) > 5:
             self.desired_pitch = get_first_vert_shot(distance, elevation+1)
+            self.vert_angle_step += 3
         else:
             self.desired_pitch = get_next_vert_shot(self.desired_pitch, self.vert_error, self.vert_step_size)
             self.vert_step_size *= 0.8
@@ -276,14 +278,14 @@ class MalmoAgent():
             if arrow:
                 data.append(np.asarray([arrow["x"], arrow["y"], arrow["z"]]))
 
-        self.vert_error = 10
-        self.hori_error = 0
+        vert_error = 0
+        hori_error = 0
         if len(data) > 0:
             target_loc = np.asarray([target_transform["x"], target_transform["y"], target_transform["z"]])
             closest_point = get_closest_point(data, target_loc)
             for i in range(len(data)):
                 if self.desired_pitch < 85 and (i == 0 or not np.array_equal(data[i], data[i-1])):
-                    self.vert_shots[1].append([magnitude(data[i][0:2:2] - np.asarray([self.transform["x"], self.transform["z"]])), data[i][1] - self.transform["y"], self.desired_pitch])
+                    self.vert_shots[1].append([magnitude(data[i][::2] - np.asarray([self.transform["x"], self.transform["z"]])), data[i][1] - self.transform["y"], self.desired_pitch])
                     self.hori_shots[1].append([get_hori_angle(self.transform["x"], self.transform["z"], data[i][0], data[i][2]), self.desired_yaw])
                 if i > 1 and get_angle_between(data[i] - data[i-1], data[i-1] - data[i-2]) > 45:
                     break
@@ -292,8 +294,8 @@ class MalmoAgent():
                         get_hori_angle(self.transform["x"], self.transform["z"], target_loc[0], target_loc[2])
             self.hori_error = ((self.hori_error + 180) % 360) - 180
 
-            print("Vert Error:", self.vert_error)
-            print("Hori Error:", self.hori_error)
+            self.vert_errors.append(vert_error)
+            self.hori_errors.append(hori_error)
             commands.append((self.agent, "chat /kill @e[type=!player]", total_time + 0))
 
         return -((self.vert_error**2 + self.hori_error**2)**0.5)

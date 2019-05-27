@@ -11,11 +11,11 @@ import json
 import random
 import math
 import numpy as np
-from matplotlib import pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from Missions.staticflyingtarget import StaticFlyingTargetMission
 from malmo_agent import MalmoAgent
+from graphing import Graphing
 
 def load_grid(agent):
     global world_state
@@ -48,9 +48,9 @@ malmo.minecraftbootstrap.launch_minecraft([10001, 10002])
 # Create default Malmo objects:
 my_mission = StaticFlyingTargetMission()
 agents = my_mission.two_agent_init()
-iterations = 3
+iterations = 5
 for i in range(iterations):
-    params = (random.randint(10, 30)*random.randrange(-1, 2, 2), random.randint(10, 20), random.randint(10, 30)*random.randrange(-1, 2, 2))
+    params = (random.randint(10, 50)*random.randrange(-1, 2, 2), random.randint(10, 30), random.randint(10, 50)*random.randrange(-1, 2, 2))
     mission = my_mission.get_mission_xml(params)
     my_mission.load_duo_mission(mission,agents,params)
     my_mission.chat_command_init(agents[0],agents[1],params)
@@ -86,4 +86,11 @@ for i in range(iterations):
     print("Mission ended")
     # Mission has ended.
 
+# Graph results
+Graphing.FitData(shoot_agent.vert_shots[0] + shoot_agent.vert_shots[1])
+Graphing.FitErrors(shoot_agent.vert_errors, shoot_agent.hori_errors)
+Graphing.DataGraph()
+Graphing.PredictionGraph()
+Graphing.ErrorGraph()
+Graphing.AccuracyGraph()
 
