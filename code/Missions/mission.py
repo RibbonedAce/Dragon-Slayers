@@ -24,6 +24,7 @@ class Mission():
         agent = example.one_agent_init()
         for i in range(50):
             example.load_solo_mission(mission, agent)
+            example.chat_command_init()
                 ...
                     ...
     '''
@@ -34,7 +35,8 @@ class Mission():
     def chat_command_init(params):
         #implemented in children
         pass
-
+        
+    
     def one_agent_init():
         agent = MalmoPython.AgentHost()
         try:
@@ -147,6 +149,10 @@ class Mission():
 
         print()
         print("Mission running.")
+
+
+    def ai_step(self, move_agent):
+        pass
 
 
 
