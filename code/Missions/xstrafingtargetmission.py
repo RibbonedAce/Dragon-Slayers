@@ -9,7 +9,7 @@ def fill_inventory():
         result += "<InventoryItem slot=\"" + str(i) + "\" type=\"bow\" quantity=\"1\"/>\n"
     return result
 
-class StaticFlyingTargetMission(Mission):
+class XStrafingTargetMission(Mission):
 
     def __init__(self):
         self.direction = 1
@@ -70,6 +70,7 @@ class StaticFlyingTargetMission(Mission):
                         <Range name="Mobs" xrange="10000" yrange="10000" zrange="10000" update_frequency="1"/>
                     </ObservationFromNearbyEntities>
                     <ChatCommands/>
+                    <MissionQuitCommands/>
                 </AgentHandlers>
               </AgentSection>
             </Mission>'''
@@ -83,7 +84,7 @@ class StaticFlyingTargetMission(Mission):
 
     def ai_step(self, move_agent):
         MOVE_DURATION = 60 #ticks until switch direction
-        if move_agent.total_time % MOVE_DURATION == 59:
+        if move_agent.total_time % MOVE_DURATION == MOVE_DURATION-1:
             self.toggle_direction(move_agent)
 
     def toggle_direction(self, move_agent):

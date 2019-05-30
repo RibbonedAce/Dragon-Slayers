@@ -107,7 +107,7 @@ def get_closest_point(curve, target):
 
 class MalmoAgent():
 
-    def __init__(self, name, agent, pitch, yaw, vert_step_size, hori_step_size):
+    def __init__(self, name, agent, pitch, yaw, vert_step_size, hori_step_size, model=None, data_set=None):
         self.name = name
         self.agent = agent
         self.pitch = pitch
@@ -120,11 +120,12 @@ class MalmoAgent():
         self.hori_step_size = hori_step_size
         self.desired_pitch = pitch
         self.desired_yaw = yaw
-        self.vert_shots = [[], []]
-        self.hori_shots = [[], []]
+        #Data set encapsulates hori_shots and vert_shots
+        self.data_set = data_set
         self.hori_errors = []
         self.vert_errors = []
         self.vert_angle_step = 0
+        self.model = model
 
     def step(self, obs):
         #Run this once a tick
@@ -151,7 +152,7 @@ class MalmoAgent():
         return result
 
     def get_first_vert_shot(self, distance, elevation):
-        array = np.asarray(self.vert_shots[0] + self.vert_shots[1])
+        array = np.asarray(self.data_set.vert_shots[0] + self.data_set.vert_shots[1])
         if array.shape[0] > 100:
             if elevation > distance:
                 array = array[array[:,-1] > 45]
@@ -159,8 +160,8 @@ class MalmoAgent():
                 array = array[array[:,-1] <= 45]
         if self.vert_angle_step >= 45:
             poly = PolynomialFeatures(2, include_bias=False).fit(array[:,:-1])
-            predictor = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,-1])
-            return min(predictor.predict(poly.transform([[distance, elevation]]))[0], 89.9)
+            self.model = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,-1])
+            return min(self.model.predict(poly.transform([[distance, elevation]]))[0], 89.9)
 
         self.vert_angle_step += 3
         return self.vert_angle_step
@@ -175,11 +176,11 @@ class MalmoAgent():
         return prev_angle*(1-step_size) + bound_angle*step_size
 
     def get_first_hori_shot(self, angle, distance, x_velocity):
-        array = np.asarray(self.hori_shots[0] + self.hori_shots[1])
+        array = np.asarray(self.data_set.hori_shots[0] + self.data_set.hori_shots[1])
         if array.shape[0] > 100:
             poly = PolynomialFeatures(2, include_bias=False).fit(array[:,:-1])
-            predictor = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,1])
-            return predictor.predict(poly.transform([[angle, distance, x_velocity]]))[0]
+            self.model = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,1])
+            return self.model.predict(poly.transform([[angle, distance, x_velocity]]))[0]
         
         return random.randrange(-180, 180)
 
@@ -300,9 +301,9 @@ class MalmoAgent():
             closest_point = get_closest_point(data, target_loc)
             for i in range(len(data)):
                 if self.desired_pitch < 85 and (i == 0 or not np.array_equal(data[i][0], data[i-1][0])):
-                    self.vert_shots[1].append([magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]])), data[i][0][1] - self.transform["y"], self.desired_pitch])
+                    self.data_set.vert_shots[1].append([magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]])), data[i][0][1] - self.transform["y"], self.desired_pitch])
                     pred_location = data[i][0] - abs_velocity*(data[i][1]-data[0][1])/1000
-                    self.hori_shots[1].append([get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]), \
+                    self.data_set.hori_shots[1].append([get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]), \
                                                magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]])), target_velocity[0], self.desired_yaw])
                 if i > 1 and get_angle_between(data[i][0] - data[i-1][0], data[i-1][0] - data[i-2][0]) > 45:
                     break

@@ -75,6 +75,8 @@ class Mission():
         mission.setViewpoint(0)
         # Attempt to start a mission:
         max_retries = 25
+        #Quit out of currently running mission
+        agents[0].sendCommand("quit")
         clients = MalmoPython.ClientPool()
         clients.add(MalmoPython.ClientInfo('127.0.0.1', 10001))
         clients.add(MalmoPython.ClientInfo('127.0.0.1', 10002))
@@ -123,7 +125,8 @@ class Mission():
         clients.add(MalmoPython.ClientInfo('127.0.0.1', 10000)) # add Minecraft machines here as available
         #Quit from existing mission
         max_retries = 25
-
+        #Quit out of currently running mission
+        agent.sendCommand("quit")
         # Attempt to start a mission:
         for retry in range(max_retries):
             try:

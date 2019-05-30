@@ -64,6 +64,7 @@ class StaticFlyingTargetMission(Mission):
                         <Range name="Mobs" xrange="10000" yrange="10000" zrange="10000" update_frequency="1"/>
                     </ObservationFromNearbyEntities>
                     <ChatCommands/>
+                    <MissionQuitCommands/>
                 </AgentHandlers>
               </AgentSection>
             </Mission>'''

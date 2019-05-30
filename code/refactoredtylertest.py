@@ -16,6 +16,13 @@ from sklearn.preprocessing import PolynomialFeatures
 from Missions.staticflyingtarget import StaticFlyingTargetMission
 from malmo_agent import MalmoAgent
 from graphing import Graphing
+from fileio import FileIO
+from dataset import DataSet
+import pickle
+import os.path
+
+    
+    
 
 def load_grid(agent):
     global world_state
@@ -58,6 +65,11 @@ malmo.minecraftbootstrap.launch_minecraft([10001, 10002])
 my_mission = StaticFlyingTargetMission()
 agents = my_mission.two_agent_init()
 iterations = 5
+shoot_agent = None
+#Load model from file
+model = FileIO.get_model()
+data_set = FileIO.get_data_set()
+
 for i in range(iterations):
     params = (random.randint(10, 50)*random.randrange(-1, 2, 2), random.randint(10, 30), random.randint(10, 50)*random.randrange(-1, 2, 2))
     mission = MalmoPython.MissionSpec(my_mission.get_mission_xml(params), True)
@@ -71,8 +83,8 @@ for i in range(iterations):
     vert_step_size = 0.5
     hori_step_size = 0.5
     
-    shoot_agent = MalmoAgent("Slayer",agents[0],0,0,vert_step_size,hori_step_size)
-    move_agent = MalmoAgent("Mover",agents[1],0,0,vert_step_size,hori_step_size)
+    shoot_agent = MalmoAgent("Slayer",agents[0],0,0,vert_step_size,hori_step_size,model, data_set)
+    move_agent = MalmoAgent("Mover",agents[1],0,0,vert_step_size,hori_step_size,None, None)
     my_mission.chat_command_init(shoot_agent,move_agent,params)
     
     world_state = shoot_agent.agent.peekWorldState()
@@ -97,8 +109,11 @@ for i in range(iterations):
     print("Mission ended")
     # Mission has ended.
 
+#Save model to file
+FileIO.save_data("model",model)
+FileIO.save_data("dataset",data_set)
 # Graph results
-Graphing.FitData(shoot_agent.vert_shots[0] + shoot_agent.vert_shots[1])
+Graphing.FitData(data_set.vert_shots[0] + data_set.vert_shots[1])
 Graphing.FitErrors(shoot_agent.vert_errors, shoot_agent.hori_errors)
 Graphing.DataGraph()
 Graphing.PredictionGraph()

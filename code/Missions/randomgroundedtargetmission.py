@@ -52,6 +52,7 @@ class RandomGroundedTargetMission(Mission):
                         <Range name="Mobs" xrange="10000" yrange="1" zrange="10000" update_frequency="1"/>
                     </ObservationFromNearbyEntities>
                     <ChatCommands/>
+                    <MissionQuitCommands/>
                     <InventoryCommands/>
                 </AgentHandlers>
               </AgentSection>
