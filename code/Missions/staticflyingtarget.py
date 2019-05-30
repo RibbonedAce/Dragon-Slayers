@@ -1,4 +1,4 @@
-from mission import Mission
+from Missions.mission import Mission
 
 
 def fill_inventory():
@@ -9,7 +9,7 @@ def fill_inventory():
 
 class StaticFlyingTargetMission(Mission):
 
-    def get_mission_xml(params):
+    def get_mission_xml(self, params):
         return '''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
             <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
@@ -68,11 +68,11 @@ class StaticFlyingTargetMission(Mission):
               </AgentSection>
             </Mission>'''
     
-    def chat_command_init(self,shoot_agent, move_agent, params):
-      shoot_agent.commands.append((shoot_agent, "chat /kill @e[type=!player]", 0))
-      shoot_agent.commands.append((shoot_agent, "hotbar.1 1", 0))
-      shoot_agent.commands.append((shoot_agent, "hotbar.1 0", 0))
-      move_agent.commands.append((move_agent, "chat /gamemode 3", 0))
-      move_agent.commands.append((move_agent, "jump 1", 0))
-      move_agent.commands.append((move_agent, "jump 0", params[1]))
-      move_agent.commands.append((move_agent, "chat /gamemode 1", params[1]))
+    def chat_command_init(self, shoot_agent, move_agent, params):
+      shoot_agent.commands.append((shoot_agent.agent, "chat /kill @e[type=!player]", 0))
+      shoot_agent.commands.append((shoot_agent.agent, "hotbar.1 1", 0))
+      shoot_agent.commands.append((shoot_agent.agent, "hotbar.1 0", 0))
+      move_agent.commands.append((move_agent.agent, "chat /gamemode 3", 0))
+      move_agent.commands.append((move_agent.agent, "jump 1", 0))
+      move_agent.commands.append((move_agent.agent, "jump 0", params[1]))
+      move_agent.commands.append((move_agent.agent, "chat /gamemode 1", params[1]))

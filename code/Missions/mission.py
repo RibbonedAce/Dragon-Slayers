@@ -28,16 +28,15 @@ class Mission():
                 ...
                     ...
     '''
-    def get_mission_xml(params):
+    def get_mission_xml(self, params):
         #implemented in children
         pass
 
-    def chat_command_init(params):
+    def chat_command_init(self, params):
         #implemented in children
         pass
-        
-    
-    def one_agent_init():
+
+    def one_agent_init(self):
         agent = MalmoPython.AgentHost()
         try:
             agent.parse( sys.argv )
@@ -50,7 +49,7 @@ class Mission():
             exit(0)
         return agent
 
-    def two_agent_init():
+    def two_agent_init(self):
         # Create default Malmo objects:
         agent1 = MalmoPython.AgentHost()
         agent2 = MalmoPython.AgentHost()
@@ -70,7 +69,7 @@ class Mission():
             exit(0)
         return (agent1,agent2)
 
-    def load_duo_mission(mission, agents):
+    def load_duo_mission(self, mission, agents):
         #agen
         mission_record = MalmoPython.MissionRecordSpec()
         mission.setViewpoint(0)
@@ -115,7 +114,7 @@ class Mission():
         print()
         print("Mission running.")
 
-    def load_solo_mission(mission,agent):
+    def load_solo_mission(self, mission, agent):
         mission_record = MalmoPython.MissionRecordSpec()
         mission.setViewpoint(0)
         
