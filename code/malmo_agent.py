@@ -285,6 +285,8 @@ class MalmoAgent():
         while ticks_to_wait > 0:
             ticks_to_wait -= 1
             time.sleep(0.05)
+            #Begin charging new arrow
+            self.agent.sendCommand("use 1")
             self.set_obs(load_grid(self.agent))
             if not self._obs:
                 return
