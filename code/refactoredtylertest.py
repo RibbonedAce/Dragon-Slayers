@@ -65,26 +65,29 @@ malmo.minecraftbootstrap.launch_minecraft([10001, 10002])
 my_mission = StaticFlyingTargetMission()
 agents = my_mission.two_agent_init()
 iterations = 5
-shoot_agent = None
+vert_step_size = 0.5
+hori_step_size = 0.5
+
 #Load model from file
 model = FileIO.get_model()
 data_set = FileIO.get_data_set()
+shoot_agent = MalmoAgent("Slayer",agents[0],0,0,vert_step_size,hori_step_size,model, data_set)
+move_agent = MalmoAgent("Mover",agents[1],0,0,vert_step_size,hori_step_size,None, None)
+
 
 for i in range(iterations):
     params = (random.randint(10, 50)*random.randrange(-1, 2, 2), random.randint(10, 30), random.randint(10, 50)*random.randrange(-1, 2, 2))
     mission = MalmoPython.MissionSpec(my_mission.get_mission_xml(params), True)
     my_mission.load_duo_mission(mission, agents)
+    shoot_agent.reset()
+    move_agent.reset()
     
     # Loop until mission ends:
     shoot_cycle = 50
     record_cycle = 86
     total_time = 0
     real_time = time.time()
-    vert_step_size = 0.5
-    hori_step_size = 0.5
     
-    shoot_agent = MalmoAgent("Slayer",agents[0],0,0,vert_step_size,hori_step_size,model, data_set)
-    move_agent = MalmoAgent("Mover",agents[1],0,0,vert_step_size,hori_step_size,None, None)
     my_mission.chat_command_init(shoot_agent,move_agent,params)
     
     world_state = shoot_agent.agent.peekWorldState()

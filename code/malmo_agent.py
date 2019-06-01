@@ -134,7 +134,10 @@ class MalmoAgent():
         self.total_time += 1
         self.process_commands(self.total_time)
 
-            
+    def reset(self):
+        #Reset the time for commands
+        self.total_time = 0
+        self.comands = []
         
     def set_obs(self, obs):
         if not obs:
@@ -244,6 +247,7 @@ class MalmoAgent():
     def process_commands(self, mission_elapsed_time):
         for command in self.commands:
             if command[2] <= mission_elapsed_time:
+                print(command[1], command[2])
                 self.commands.remove(command)
                 command[0].sendCommand(command[1])
 

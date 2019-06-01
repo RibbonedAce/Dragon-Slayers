@@ -14,7 +14,7 @@ class Graphing:
         Graphing.errors = (np.asarray(vert_errors)**2 + np.asarray(hori_errors)**2)**0.5
     
     def DataGraph():
-        assert Graphing.array, "Need to fit data points; use Graphing.FitData"
+        assert not Graphing.array is None, "Need to fit data points; use Graphing.FitData"
         colors = [(min(max(0, 2 - 4*s/45), 1), \
                    min(max(0, 2 - abs((4*s-90)/45)), 1), \
                    min(max(0, 4*s/45 - 2), 1)) for s in Graphing.array[:,2]]
@@ -25,7 +25,7 @@ class Graphing:
         plt.show()
 
     def PredictionGraph():
-        assert Graphing.array, "Need to fit data points; use Graphing.FitData"
+        assert not Graphing.array is None, "Need to fit data points; use Graphing.FitData"
         poly = PolynomialFeatures(2, include_bias=False).fit(Graphing.array[:,:-1])
         predictor = LinearRegression().fit(poly.transform(Graphing.array[:,:-1]), Graphing.array[:,-1])
         xSpace = np.linspace(0, Graphing.array[:,0].max(), 100)
@@ -45,7 +45,7 @@ class Graphing:
         plt.show()
 
     def ErrorGraph():
-        assert Graphing.errors, "Need to fit errors; use Graphing.FitErrors"
+        assert not Graphing.errors is None, "Need to fit errors; use Graphing.FitErrors"
         plt.scatter(range(Graphing.errors.shape[0]), Graphing.errors)
         plt.title("Errors for each shot")
         plt.xlabel("Arrow shot")
@@ -53,7 +53,7 @@ class Graphing:
         plt.show()
 
     def AccuracyGraph():
-        assert Graphing.errors, "Need to fit errors; use Graphing.FitErrors"
+        assert not Graphing.errors is None, "Need to fit errors; use Graphing.FitErrors"
         accuracies = []
         for i in range(5, len(Graphing.errors)):
             shots = Graphing.errors[i-5:i]
