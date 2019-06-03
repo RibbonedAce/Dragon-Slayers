@@ -18,6 +18,7 @@ from malmo_agent import MalmoAgent
 from graphing import Graphing
 from fileio import FileIO
 from dataset import DataSet
+from timekeeper import TimeKeeper
 import pickle
 import os.path
 
@@ -28,7 +29,7 @@ def load_grid(agent):
     global world_state
     
     wait_time = 0
-
+    keeper = TimeKeeper()
     while wait_time < 10:
         #sys.stdout.write(".")
         
@@ -44,7 +45,7 @@ def load_grid(agent):
             result["time"] = int(round(time.time() * 1000))
             return result
 
-        time.sleep(0.05)
+        keeper.advance_by(0.05)
         wait_time += 0.05
 
 def find_mob_by_name(mobs, name, new=False):
@@ -86,7 +87,7 @@ for i in range(iterations):
     shoot_cycle = 50
     record_cycle = 86
     total_time = 0
-    real_time = time.time()
+    keeper = TimeKeeper()
     
     my_mission.chat_command_init(shoot_agent,move_agent,params)
     
@@ -99,13 +100,12 @@ for i in range(iterations):
         shoot_agent.step(obs)
         move_agent.step(obs)
         total_time += 1
-        sleep_until(real_time + 0.05)
-        real_time += 0.05
+        keeper.advance_by(0.05)
 
         if total_time >= shoot_cycle:
             shoot_cycle += 30
             shoot_agent.shoot_at_target(find_mob_by_name(obs["Mobs"],"Mover"))
-            reward = shoot_agent.record_data(find_mob_by_name(obs["Mobs"],"Mover"))
+            reward = shoot_agent.record_data(find_mob_by_name(obs["Mobs"],"Mover"), move_agent)
             real_time = time.time()
             
     print()
@@ -122,4 +122,3 @@ Graphing.DataGraph()
 Graphing.PredictionGraph()
 Graphing.ErrorGraph()
 Graphing.AccuracyGraph()
-

@@ -14,9 +14,11 @@ import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
+from timekeeper import TimeKeeper
 
 def load_grid(agent):
     wait_time = 0
+    keeper = TimeKeeper()
     while wait_time < 10:
         #sys.stdout.write(".")
         world_state = agent.getWorldState()
@@ -31,7 +33,7 @@ def load_grid(agent):
             result["time"] = int(round(time.time() * 1000))
             return result
 
-        time.sleep(0.05)
+        keeper.advance_by(0.05)
         wait_time += 0.05
 
 def find_mob_by_name(mobs, name, new=False):
@@ -120,6 +122,7 @@ class MalmoAgent():
         self.hori_step_size = hori_step_size
         self.desired_pitch = pitch
         self.desired_yaw = yaw
+        self.last_shot = 0
         #Data set encapsulates hori_shots and vert_shots
         self.data_set = data_set
         self.hori_errors = []
@@ -182,7 +185,7 @@ class MalmoAgent():
         array = np.asarray(self.data_set.hori_shots[0] + self.data_set.hori_shots[1])
         if array.shape[0] > 100:
             poly = PolynomialFeatures(2, include_bias=False).fit(array[:,:-1])
-            self.model = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,1])
+            self.model = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,-1])
             return self.model.predict(poly.transform([[angle, distance, x_velocity]]))[0]
         
         return random.randrange(-180, 180)
@@ -247,7 +250,6 @@ class MalmoAgent():
     def process_commands(self, mission_elapsed_time):
         for command in self.commands:
             if command[2] <= mission_elapsed_time:
-                print(command[1], command[2])
                 self.commands.remove(command)
                 command[0].sendCommand(command[1])
 
@@ -277,26 +279,31 @@ class MalmoAgent():
         #else:
             #self.desired_yaw = self.get_next_hori_shot(self.desired_yaw, self.hori_errors[-1], self.hori_step_size)
             #self.vert_step_size *= 0.8
-            
+
+        self.last_shot = time.time()
         self.set_yaw_and_pitch(self.desired_yaw, -self.desired_pitch)
         self.agent.sendCommand("use 0")
+        time.sleep(0.1)
 
-    def record_data(self, target_transform):
-
+    def record_data(self, target_transform, other=None):
+        if not other:
+            other = self
+        
         ticks_to_wait = 50
-
+        keeper = TimeKeeper()
+        
         data = []
         while ticks_to_wait > 0:
-            ticks_to_wait -= 1
-            time.sleep(0.05)
             #Begin charging new arrow
             self.agent.sendCommand("use 1")
-            self.set_obs(load_grid(self.agent))
-            if not self._obs:
+            other.set_obs(load_grid(other.agent))
+            if not other._obs:
                 return
-            arrow = find_mob_by_name(self._obs["Mobs"], "Arrow")
+            arrow = find_mob_by_name(other._obs["Mobs"], "Arrow")
             if arrow:
-                data.append((np.asarray([arrow["x"], arrow["y"], arrow["z"]]), self._obs["time"]))
+                data.append((np.asarray([arrow["x"], arrow["y"], arrow["z"]]), other._obs["time"]))
+            ticks_to_wait -= 1
+            keeper.advance_by(0.05)
 
         vert_error = 0
         hori_error = 0
@@ -308,7 +315,7 @@ class MalmoAgent():
             for i in range(len(data)):
                 if self.desired_pitch < 85 and (i == 0 or not np.array_equal(data[i][0], data[i-1][0])):
                     self.data_set.vert_shots[1].append([magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]])), data[i][0][1] - self.transform["y"], self.desired_pitch])
-                    pred_location = data[i][0] - abs_velocity*(data[i][1]-data[0][1])/1000
+                    pred_location = data[i][0] - abs_velocity*(data[i][1]-self.last_shot)/1000
                     self.data_set.hori_shots[1].append([get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]), \
                                                magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]])), target_velocity[0], self.desired_yaw])
                 if i > 1 and get_angle_between(data[i][0] - data[i-1][0], data[i-1][0] - data[i-2][0]) > 45:
