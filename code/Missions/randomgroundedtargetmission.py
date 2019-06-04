@@ -83,11 +83,9 @@ class RandomGroundedTargetMission(Mission):
 
 
     def ai_step(self, move_agent):
-        MOVE_DURATION = 60 #ticks until switch direction
-        if move_agent.total_time % MOVE_DURATION == MOVE_DURATION-1:
-            move_agent.agent.sendCommand("move 0")
-            self.set_random_direction(move_agent)
-            move_agent.agent.sendCommand("move 1")
+        move_agent.agent.sendCommand("move 0")
+        self.set_random_direction(move_agent)
+        move_agent.agent.sendCommand("move 1")
 
     def set_random_direction(self, move_agent):
         desiredYaw = random.random()

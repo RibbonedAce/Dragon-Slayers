@@ -86,9 +86,7 @@ class YStrafingTargetMission(Mission):
 
 
     def ai_step(self, move_agent):
-        MOVE_DURATION = 40 #ticks until switch direction
-        if move_agent.total_time % MOVE_DURATION == MOVE_DURATION-1:
-            self.toggle_direction(move_agent)
+        self.toggle_direction(move_agent)
 
     def toggle_direction(self, move_agent):
         self.direction *= -1

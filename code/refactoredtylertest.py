@@ -85,12 +85,13 @@ try:
         move_agent.reset()
         
         # Loop until mission ends:
-        shoot_cycle = 50
         record_cycle = 86
         total_time = 0
         keeper = TimeKeeper()
         
         my_mission.chat_command_init(shoot_agent,move_agent,params)
+        shoot_agent.agent.sendCommand("use 1")
+        initial_delay = 35
         
         world_state = shoot_agent.agent.peekWorldState()
         while world_state.is_mission_running:
@@ -98,30 +99,28 @@ try:
             if not obs:
                 break
             
-            shoot_agent.step(obs)
-            move_agent.step(obs)
-            total_time += 1
-            keeper.advance_by(0.05)
-
-            if total_time >= shoot_cycle:
-                shoot_cycle += 30
-                shoot_agent.shoot_at_target(find_mob_by_name(obs["Mobs"],"Mover"))
-                reward = shoot_agent.record_data(find_mob_by_name(obs["Mobs"],"Mover"), move_agent)
-                real_time = time.time()
-                
+            #initial delay runs once per mission
+            while(initial_delay > 0):
+                initial_delay -= 1
+                time.sleep(0.05)
                 shoot_agent.step(obs)
                 move_agent.step(obs)
-                my_mission.ai_step(move_agent)
-                total_time += 1
-                sleep_until(real_time + 0.05)
-                real_time += 0.05
 
-                if total_time >= shoot_cycle:
-                    shoot_cycle += 30
-                    shoot_agent.shoot_at_target(find_mob_by_name(obs["Mobs"],"Mover"))
-                    reward = shoot_agent.record_data(find_mob_by_name(obs["Mobs"],"Mover"))
-                    real_time = time.time()
-                print(len(shoot_agent.data_set.hori_shots))
+            #agent step
+            shoot_agent.step(obs)
+            move_agent.step(obs)
+            
+
+            #Shoot at target
+            shoot_agent.shoot_at_target(find_mob_by_name(obs["Mobs"],"Mover"))
+
+            #Record data
+            reward = shoot_agent.record_data(find_mob_by_name(obs["Mobs"],"Mover"))
+
+            #Change mover direction
+            my_mission.ai_step(move_agent)
+
+
             print()
             print("Mission ended")
             # Mission has ended.
