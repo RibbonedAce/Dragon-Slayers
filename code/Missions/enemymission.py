@@ -5,11 +5,7 @@ from Missions.mission import Mission
 import random
 
 
-def fill_inventory():
-    result = ""
-    for i in range(36):
-        result += "<InventoryItem slot=\"" + str(i) + "\" type=\"bow\" quantity=\"1\"/>\n"
-    return result
+
 
 class EnemyMission(Mission):
 

@@ -45,6 +45,9 @@ def find_mob_by_name(mobs, name, new=False):
 def magnitude(vector):
     return np.sqrt(np.sum(vector**2))
 
+def flat_distance(vector):
+    #magnitude of (x, 0, z).  Ignore y difference
+    return math.sqrt(vector[0]**2 + vector[2]**2)
 
 def vert_distance(xtarget, ztarget, xsource=0, zsource=0):
     return ((xtarget - xsource)**2 + (ztarget - zsource)**2) ** 0.5
@@ -128,6 +131,7 @@ class MalmoAgent():
         self.hori_errors = []
         self.vert_errors = []
         self.model = model
+        self.end_mission = False
 
         #Decide if we need to get data for vertical shots
         if self.data_set:
@@ -313,15 +317,25 @@ class MalmoAgent():
         
         data = []
         target_data = []
+        
+        player_loc = np.asarray([self.transform["x"], self.transform["y"], self.transform["z"]])
         while ticks_to_wait > 0:
             other.set_obs(load_grid(other.agent))
             if not other._obs:
                 return
             arrow = find_mob_by_name(other._obs["Mobs"], "Arrow")
             target = find_mob_by_name(other._obs["Mobs"], "Mover")
-            if arrow:
-                data.append((np.asarray([arrow["x"], arrow["y"], arrow["z"]]), other._obs["time"]))
+            
             target_data.append((np.asarray([target["x"], target["y"], target["z"]]), other._obs["time"]))
+            #if arrow found
+            if arrow:
+                #get arrow location
+                arrow_data = np.asarray([arrow["x"], arrow["y"], arrow["z"]])
+                #if first arrow data or different from previous arrow data
+                #avoid appending duplicate adjacent data
+                if len(data) == 0 or not np.array_equal(arrow_data,data[-1][0]):
+                    data.append((arrow_data, other._obs["time"]))
+            
             ticks_to_wait -= 1
             keeper.advance_by(0.05)
 
@@ -335,14 +349,30 @@ class MalmoAgent():
             abs_velocity = (target_data[-1][0] - target_data[0][0]) / (target_data[-1][1] - target_data[0][1])
             target_velocity = project_vector(abs_velocity, vector_from_angle(self.transform["yaw"]))
             closest_point = get_closest_point(data, target_loc)
+            last_distance_from_player = 0
+            current_distance_from_player = 0
+
+            #Count the number of instances where distance to arrow decreases
+            reverse_ticks = 0
+            
             for i in range(len(data)):
                 if self.desired_pitch < 85 and (i == 0 or not np.array_equal(data[i][0], data[i-1][0])):
                     self.data_set.vert_shots[1].append([magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]])), data[i][0][1] - self.transform["y"], self.desired_pitch])
                     pred_location = data[i][0] - abs_velocity*(data[i][1]-self.last_shot)
                     self.data_set.hori_shots[1].append([get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]), \
                                                magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]])), target_velocity[0], self.desired_yaw])
-                if i > 1 and get_angle_between(data[i][0] - data[i-1][0], data[i-1][0] - data[i-2][0]) > 45:
-                    break
+
+
+                #get arrow position distance from shooter.  Ignore y-difference
+                current_distance_from_player = flat_distance(data[i][0]-player_loc)
+
+                #Arrow hits if arrow's distance from player decreases.  Arrow's should strictly move away from the player's shooting position if they do not hit anyone
+                if i > 1 and current_distance_from_player < last_distance_from_player:
+                    reverse_ticks += 1
+
+                #Update previous position
+                last_distance_from_player = current_distance_from_player
+                
             vert_error = closest_point[1] - target_loc[1]
             hori_error = get_hori_angle(self.transform["x"], self.transform["z"], closest_point[0], closest_point[2]) - \
                         get_hori_angle(self.transform["x"], self.transform["z"], target_loc[0], target_loc[2])
@@ -351,6 +381,11 @@ class MalmoAgent():
             self.vert_errors.append(vert_error)
             self.hori_errors.append(hori_error)
             self.commands.append((self.agent, "chat /kill @e[type=!player]", self.total_time + 0))
+
+            #An arrow hits the target if it has moved backward for more than 2 ticks
+            #(Arrows that hit nothing decrease in distance for 1-2 ticks)
+            if reverse_ticks > 2:
+                self.end_mission = True
 
         return -((vert_error**2 + hori_error**2)**0.5)
 

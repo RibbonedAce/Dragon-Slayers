@@ -107,6 +107,7 @@ try:
                 shoot_agent.step(obs)
                 move_agent.step(obs)
 
+
             #agent step
             shoot_agent.step(obs)
             move_agent.step(obs)
@@ -116,11 +117,15 @@ try:
             shoot_agent.shoot_at_target(find_mob_by_name(obs["Mobs"],"Mover"))
 
             #Record data
-            reward = shoot_agent.record_data(find_mob_by_name(obs["Mobs"],"Mover"))
+            reward = shoot_agent.record_data(find_mob_by_name(obs["Mobs"],"Mover"), move_agent)
 
             #Change mover direction
             my_mission.ai_step(move_agent)
 
+            #If shoot agent hits target, end mission early
+            if shoot_agent.end_mission:
+                print("Ending mission early...")
+                break
 
         print()
         print("Mission ended")
