@@ -1,5 +1,5 @@
 
-from mission import Mission
+from Missions.mission import Mission
 import random
 
 
@@ -59,7 +59,7 @@ class XStrafingTargetMission(Mission):
               <AgentSection mode="Survival">
                 <Name>Mover</Name>
                 <AgentStart>
-                    <Placement x="'''+str(params[0])+'''" y="4" z="'''+str(params[2])+'''" yaw="180"/>
+                    <Placement x="'''+str(params[0])+'''" y="4" z="'''+str(params[1])+'''" yaw="180"/>
                     <Inventory>
                         '''+fill_inventory()+'''
                     </Inventory>
@@ -76,17 +76,18 @@ class XStrafingTargetMission(Mission):
             </Mission>'''
     
     def chat_command_init(self,shoot_agent, move_agent, params):
-      shoot_agent.commands.append((shoot_agent, "chat /kill @e[type=!player]", 0))
-      shoot_agent.commands.append((shoot_agent, "hotbar.1 1", 0))
-      shoot_agent.commands.append((shoot_agent, "hotbar.1 0", 0))
-
+        shoot_agent.commands.append((shoot_agent.agent, "chat /kill @e[type=!player]", 0))
+        shoot_agent.commands.append((shoot_agent.agent, "hotbar.1 1", 0))
+        shoot_agent.commands.append((shoot_agent.agent, "hotbar.1 0", 0))
+        move_agent.commands.append((move_agent.agent, "strafe " + str(self.direction*self.speed), 0))
 
 
     def ai_step(self, move_agent):
         MOVE_DURATION = 60 #ticks until switch direction
+        print(move_agent.total_time % MOVE_DURATION)
         if move_agent.total_time % MOVE_DURATION == MOVE_DURATION-1:
             self.toggle_direction(move_agent)
 
     def toggle_direction(self, move_agent):
         self.direction *= -1
-        move_agent.agent.sendCommand("strafe " + self.direction*self.speed)
+        move_agent.commands.append((move_agent.agent, "strafe " + str(self.direction*self.speed), 0))

@@ -1,5 +1,5 @@
 
-from mission import Mission
+from Missions.mission import Mission
 import random
 
 
@@ -60,7 +60,7 @@ class RandomGroundedTargetMission(Mission):
               <AgentSection mode="Survival">
                 <Name>Mover</Name>
                 <AgentStart>
-                    <Placement x="'''+str(params[0])+'''" y="4" z="'''+str(params[2])+'''" yaw="180"/>
+                    <Placement x="'''+str(params[0])+'''" y="4" z="'''+str(params[1])+'''" yaw="180"/>
                     <Inventory>
                         '''+fill_inventory()+'''
                     </Inventory>

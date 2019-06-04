@@ -1,5 +1,5 @@
 
-from mission import Mission
+from Missions.mission import Mission
 import random
 
 
@@ -58,7 +58,7 @@ class YStrafingTargetMission(Mission):
               <AgentSection mode="Survival">
                 <Name>Mover</Name>
                 <AgentStart>
-                    <Placement x="'''+str(params[0])+'''" y="4" z="'''+str(params[2])+'''" yaw="180"/>
+                    <Placement x="'''+str(params[0])+'''" y="4" z="'''+str(params[1])+'''" yaw="180"/>
                     <Inventory>
                         '''+fill_inventory()+'''
                     </Inventory>
@@ -80,8 +80,8 @@ class YStrafingTargetMission(Mission):
       shoot_agent.commands.append((shoot_agent, "hotbar.1 0", 0))
       move_agent.commands.append((move_agent, "chat /gamemode 3", 0))
       move_agent.commands.append((move_agent, "jump 1", 0))
-      move_agent.commands.append((move_agent, "jump 0", params[1]))
-      move_agent.commands.append((move_agent, "chat /gamemode 1", params[1]))
+      move_agent.commands.append((move_agent, "jump 0", params[2]))
+      move_agent.commands.append((move_agent, "chat /gamemode 1", params[2]))
 
 
 

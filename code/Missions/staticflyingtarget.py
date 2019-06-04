@@ -53,7 +53,7 @@ class StaticFlyingTargetMission(Mission):
               <AgentSection mode="Survival">
                 <Name>Mover</Name>
                 <AgentStart>
-                    <Placement x="'''+str(params[0])+'''" y="4" z="'''+str(params[2])+'''" yaw="180"/>
+                    <Placement x="'''+str(params[0])+'''" y="4" z="'''+str(params[1])+'''" yaw="180"/>
                     <Inventory>
                         '''+fill_inventory()+'''
                     </Inventory>
@@ -75,5 +75,5 @@ class StaticFlyingTargetMission(Mission):
       shoot_agent.commands.append((shoot_agent.agent, "hotbar.1 0", 0))
       move_agent.commands.append((move_agent.agent, "chat /gamemode 3", 0))
       move_agent.commands.append((move_agent.agent, "jump 1", 0))
-      move_agent.commands.append((move_agent.agent, "jump 0", params[1]))
-      move_agent.commands.append((move_agent.agent, "chat /gamemode 1", params[1]))
+      move_agent.commands.append((move_agent.agent, "jump 0", params[2]))
+      move_agent.commands.append((move_agent.agent, "chat /gamemode 1", params[2]))
