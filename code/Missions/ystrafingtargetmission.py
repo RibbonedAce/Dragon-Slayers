@@ -15,6 +15,7 @@ class YStrafingTargetMission(Mission):
         self.direction = 1
 
     def get_mission_xml(self, params):
+        angle = ((math.atan2(params[0],-params[1]) * 180 / 3.14159))
         return '''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
             <Mission xmlns="http://ProjectMalmo.microsoft.com" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
 
@@ -58,7 +59,7 @@ class YStrafingTargetMission(Mission):
               <AgentSection mode="Survival">
                 <Name>Mover</Name>
                 <AgentStart>
-                    <Placement x="'''+str(params[0])+'''" y="4" z="'''+str(params[1])+'''" yaw="180"/>
+                    <Placement x="'''+str(params[0])+'''" y="4" z="'''+str(params[1])+'''" yaw="'''+str(angle)+'''"/>
                     <Inventory>
                         '''+fill_inventory()+'''
                     </Inventory>
