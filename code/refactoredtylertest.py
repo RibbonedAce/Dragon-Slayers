@@ -103,7 +103,7 @@ try:
             #initial delay runs once per mission
             while(initial_delay > 0):
                 initial_delay -= 1
-                time.sleep(0.05)
+                keeper.advance_by(0.05)
                 shoot_agent.step(obs)
                 move_agent.step(obs)
 
@@ -122,8 +122,8 @@ try:
             my_mission.ai_step(move_agent)
 
 
-            print()
-            print("Mission ended")
+        print()
+        print("Mission ended")
             # Mission has ended.
 except KeyError:
     pass
