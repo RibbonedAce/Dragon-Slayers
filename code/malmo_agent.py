@@ -30,7 +30,7 @@ def load_grid(agent):
         if world_state.number_of_observations_since_last_state > 0 and \
            json.loads(world_state.observations[-1].text):
             result = json.loads(world_state.observations[-1].text)
-            result["time"] = int(round(time.time() * 1000))
+            result["time"] = time.time()
             return result
 
         keeper.advance_by(0.05)
@@ -127,8 +127,16 @@ class MalmoAgent():
         self.data_set = data_set
         self.hori_errors = []
         self.vert_errors = []
-        self.vert_angle_step = 0
         self.model = model
+
+        #Decide if we need to get data for vertical shots
+        if self.data_set:
+            vert_shots = np.asarray(self.data_set.vert_shots[0] + self.data_set.vert_shots[1])[:,2]
+            max_angle = np.max(vert_shots)
+            min_angle = np.min(vert_shots)
+            self.vert_angle_step = 45 if max_angle - min_angle > 40 else -3
+        else:
+            self.vert_angle_step = 0
 
     def step(self, obs):
         #Run this once a tick
@@ -145,11 +153,23 @@ class MalmoAgent():
     def set_obs(self, obs):
         if not obs:
             return
+        
+        has_prev = True if self._obs else False
+        if has_prev:
+            prev_time = self._obs["time"]
+            prev_pos = np.asarray([self.transform["x"], self.transform["y"], self.transform["z"]])
+            
         self._obs = obs
         for entity in self._obs["Mobs"]:
             if entity["name"] == self.name:
                 self.transform = entity
-
+                
+                if has_prev:
+                    new_pos = np.asarray([self.transform["x"], self.transform["y"], self.transform["z"]])
+                    velocity = (new_pos - prev_pos) / (self._obs["time"] - prev_time)
+                    self.transform["motionX"] = velocity[0]
+                    self.transform["motionY"] = velocity[1]
+                    self.transform["motionZ"] = velocity[2]
             
     def fill_inventory(self):
         result = ""
@@ -283,7 +303,6 @@ class MalmoAgent():
         self.last_shot = time.time()
         self.set_yaw_and_pitch(self.desired_yaw, -self.desired_pitch)
         self.agent.sendCommand("use 0")
-        time.sleep(0.1)
 
     def record_data(self, target_transform, other=None):
         if not other:
@@ -293,37 +312,41 @@ class MalmoAgent():
         keeper = TimeKeeper()
         
         data = []
+        target_data = []
         while ticks_to_wait > 0:
-            #Begin charging new arrow
-            self.agent.sendCommand("use 1")
             other.set_obs(load_grid(other.agent))
             if not other._obs:
                 return
             arrow = find_mob_by_name(other._obs["Mobs"], "Arrow")
+            target = find_mob_by_name(other._obs["Mobs"], "Mover")
             if arrow:
                 data.append((np.asarray([arrow["x"], arrow["y"], arrow["z"]]), other._obs["time"]))
+            target_data.append((np.asarray([target["x"], target["y"], target["z"]]), other._obs["time"]))
             ticks_to_wait -= 1
             keeper.advance_by(0.05)
 
+        #Begin charging new arrow
+        self.agent.sendCommand("use 1")
+        
         vert_error = 0
         hori_error = 0
         if len(data) > 0:
             target_loc = np.asarray([target_transform["x"], target_transform["y"], target_transform["z"]])
-            abs_velocity = np.asarray([target_transform["motionX"], target_transform["motionY"], target_transform["motionZ"]])
+            abs_velocity = (target_data[-1][0] - target_data[0][0]) / (target_data[-1][1] - target_data[0][1])
             target_velocity = project_vector(abs_velocity, vector_from_angle(self.transform["yaw"]))
             closest_point = get_closest_point(data, target_loc)
             for i in range(len(data)):
                 if self.desired_pitch < 85 and (i == 0 or not np.array_equal(data[i][0], data[i-1][0])):
                     self.data_set.vert_shots[1].append([magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]])), data[i][0][1] - self.transform["y"], self.desired_pitch])
-                    pred_location = data[i][0] - abs_velocity*(data[i][1]-self.last_shot)/1000
+                    pred_location = data[i][0] - abs_velocity*(data[i][1]-self.last_shot)
                     self.data_set.hori_shots[1].append([get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]), \
                                                magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]])), target_velocity[0], self.desired_yaw])
                 if i > 1 and get_angle_between(data[i][0] - data[i-1][0], data[i-1][0] - data[i-2][0]) > 45:
                     break
-            self.vert_error = closest_point[1] - target_loc[1]
-            self.hori_error = get_hori_angle(self.transform["x"], self.transform["z"], closest_point[0], closest_point[2]) - \
+            vert_error = closest_point[1] - target_loc[1]
+            hori_error = get_hori_angle(self.transform["x"], self.transform["z"], closest_point[0], closest_point[2]) - \
                         get_hori_angle(self.transform["x"], self.transform["z"], target_loc[0], target_loc[2])
-            self.hori_error = ((self.hori_error + 180) % 360) - 180
+            hori_error = ((hori_error + 180) % 360) - 180
 
             self.vert_errors.append(vert_error)
             self.hori_errors.append(hori_error)

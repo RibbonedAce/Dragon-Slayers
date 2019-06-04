@@ -64,7 +64,8 @@ def sleep_until(desired_time):
 malmo.minecraftbootstrap.launch_minecraft([10001, 10002])
 
 # Create default Malmo objects:
-my_mission = StaticFlyingTargetMission()
+graphing = False
+my_mission = XStrafingTargetMission()
 agents = my_mission.two_agent_init()
 iterations = 5
 vert_step_size = 0.5
@@ -130,9 +131,10 @@ except KeyError:
 FileIO.save_data("model",model)
 FileIO.save_data("dataset",data_set)
 # Graph results
-Graphing.FitData(data_set.vert_shots[0] + data_set.vert_shots[1])
-Graphing.FitErrors(shoot_agent.vert_errors, shoot_agent.hori_errors)
-Graphing.DataGraph()
-Graphing.PredictionGraph()
-Graphing.ErrorGraph()
-Graphing.AccuracyGraph()
+if grpahing:
+    Graphing.FitData(data_set.vert_shots[0] + data_set.vert_shots[1])
+    Graphing.FitErrors(shoot_agent.vert_errors, shoot_agent.hori_errors)
+    Graphing.DataGraph()
+    Graphing.PredictionGraph()
+    Graphing.ErrorGraph()
+    Graphing.AccuracyGraph()
