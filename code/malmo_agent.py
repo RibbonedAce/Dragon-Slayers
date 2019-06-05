@@ -21,7 +21,7 @@ def logistic(x):
     '''
     max_val / {1 + e^(-kx)}
     '''
-    return 1/(1 + 2.71828**(-9*(x**1.24-0.5)))
+    return 1/(1 + 2.71828**(-7*(x**1-0.5)))
 
 def lerp(low, high, perc):
     return low + perc*(high-low)
@@ -216,7 +216,7 @@ class MalmoAgent():
         self.reset_shoot_loop()
 
     def reset_shoot_loop(self):
-        self.min_aim_duration = 15
+        self.min_aim_duration = 35
         self.max_record_duration = 50 #ticks
         self.shoot_state = AIMING
         self.aim_timer = 0
@@ -255,14 +255,14 @@ class MalmoAgent():
                 if self.aim_timer == 0:
                     #Calculate desired aim once at start of aiming loop
                     #aim_iteration is used to calculate rotation speed
-                    self.calculate_desired_aim(target_transform)
-                
                     self.agent.sendCommand("use 1")
                     self.yaw_damp = 1
                     self.pitch_damp = 1
                     
+                self.calculate_desired_aim(target_transform)
                 self.aim_timer += 1
                 aiming_complete = self.aim_step(self.desired_yaw, self.desired_pitch)
+                
             else:
                 self.aim_timer = 0
                 self.aim_on_target_ticks = 0
@@ -355,7 +355,7 @@ class MalmoAgent():
             #set aim velocity
             yaw_perc = clamp(0,1,abs(yaw_diff)/55)
             yaw_perc = logistic(yaw_perc)
-            yaw_speed = clamped_lerp(0.006,.15,yaw_perc)
+            yaw_speed = clamped_lerp(0.0,.18,yaw_perc)
             self.agent.sendCommand("turn " + str(yaw_multiplier * yaw_speed))
 
         if abs(pitch_diff) < allowable_deviation:
@@ -367,7 +367,7 @@ class MalmoAgent():
             #set aim velocity
             pitch_perc = clamp(0,1,abs(pitch_diff)/40)
             pitch_perc = logistic(pitch_perc)
-            pitch_speed = clamped_lerp(0.006,.15,pitch_perc)
+            pitch_speed = clamped_lerp(0.0,.15,pitch_perc)
 
             self.agent.sendCommand("pitch " + str( pitch_multiplier * pitch_speed))
        
