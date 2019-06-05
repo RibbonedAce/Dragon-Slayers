@@ -65,9 +65,9 @@ malmo.minecraftbootstrap.launch_minecraft([10001, 10002])
 
 # Create default Malmo objects:
 graphing = False
-my_mission = XStrafingTargetMission()
+my_mission = StaticFlyingTargetMission()
 agents = my_mission.two_agent_init()
-iterations = 5
+iterations = 20
 vert_step_size = 0.5
 hori_step_size = 0.5
 
@@ -79,6 +79,7 @@ move_agent = MalmoAgent("Mover",agents[1],0,0,vert_step_size,hori_step_size,None
 
 try:
     for i in range(iterations):
+        time.sleep(1)
         params = (random.randint(10, 50)*random.randrange(-1, 2, 2), random.randint(10, 50)*random.randrange(-1, 2, 2), random.randint(10, 30))
         mission = MalmoPython.MissionSpec(my_mission.get_mission_xml(params), True)
         my_mission.load_duo_mission(mission, agents)
@@ -92,7 +93,7 @@ try:
         
         my_mission.chat_command_init(shoot_agent,move_agent,params)
         shoot_agent.agent.sendCommand("use 1")
-        initial_delay = 35
+        initial_delay = 50
         
         world_state = shoot_agent.agent.peekWorldState()
         while world_state.is_mission_running:
@@ -108,35 +109,29 @@ try:
                 move_agent.step(obs)
 
 
+            target = find_mob_by_name(obs["Mobs"],"Mover")
             #agent step
-            shoot_agent.step(obs)
+            shoot_agent.shooter_step(obs, move_agent, target)
             move_agent.step(obs)
             
-
-            #Shoot at target
-            shoot_agent.shoot_at_target(find_mob_by_name(obs["Mobs"],"Mover"))
-
-            #Record data
-            reward = shoot_agent.record_data(find_mob_by_name(obs["Mobs"],"Mover"), move_agent)
-
-            #Change mover direction
-            my_mission.ai_step(move_agent)
-
             #If shoot agent hits target, end mission early
             if shoot_agent.end_mission:
+                shoot_agent.reset_shoot_loop()
                 print("Ending mission early...")
                 break
-
+            keeper.advance_by(0.05)
         print()
         print("Mission ended")
             # Mission has ended.
-except KeyError:
+except KeyboardInterrupt:
+    shoot_agent.agent.sendCommand("quit")
+    move_agent.agent.sendCommand("quit")
     pass
 #Save model to file
 FileIO.save_data("model",model)
 FileIO.save_data("dataset",data_set)
 # Graph results
-if grpahing:
+if graphing:
     Graphing.FitData(data_set.vert_shots[0] + data_set.vert_shots[1])
     Graphing.FitErrors(shoot_agent.vert_errors, shoot_agent.hori_errors)
     Graphing.DataGraph()

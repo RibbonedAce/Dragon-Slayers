@@ -16,6 +16,28 @@ from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from timekeeper import TimeKeeper
 
+
+def logistic(x):
+    '''
+    max_val / {1 + e^(-kx)}
+    '''
+    return 1/(1 + 2.71828**(-9*(x**1.24-0.5)))
+
+def lerp(low, high, perc):
+    return low + perc*(high-low)
+
+def clamp(low, high, value):
+    if value < low:
+        return low
+    if value > high:
+        return high
+    return value
+
+def clamped_lerp(low, high, perc):
+    return clamp(low, high, lerp(low, high, perc))
+
+
+
 def load_grid(agent):
     wait_time = 0
     keeper = TimeKeeper()
@@ -41,6 +63,15 @@ def find_mob_by_name(mobs, name, new=False):
         if m["name"] == name:
             return m
     return None
+def find_entity_by_id(entities, id):
+    for entity in entities:
+        if entity["id"] == id:
+            return entity
+
+def find_new_arrow(entities, arrow_set):
+    for entity in entities:
+        if entity["name"] == "Arrow" and entity["id"] not in arrow_set:
+            return entity
 
 def magnitude(vector):
     return np.sqrt(np.sum(vector**2))
@@ -110,6 +141,46 @@ def get_closest_point(curve, target):
     
     return point1 * interp + point2 * (1 - interp)
 
+AIMING = 0
+SHOOT = 1
+class ArrowTracker():
+
+    def __init__(self, malmo_agent, arrow_id):
+        self.malmo_agent = malmo_agent
+        self.arrow_id = arrow_id
+        self.track_duration = 50
+        self.delete_me = False
+        self.target_data = []
+        self.arrow_data = []
+
+    def step(self, target_transform, obs):
+        if self.track_duration > 0:
+            self.track_duration -= 1
+            self.track_arrow(target_transform, obs)
+        else:
+            self.delete_me = True
+            self.malmo_agent.analyze_arrow_trajectory(target_transform, self.arrow_data, self.target_data)
+
+    def track_arrow(self,target_transform, obs):
+        '''
+        This function is run once per tick.
+        Add the current position of the arrow to a list, if it is different from the
+        previous position.
+        '''
+        arrow = find_entity_by_id(obs["Mobs"], self.arrow_id)
+        self.target_data.append((np.asarray([target_transform["x"], target_transform["y"], target_transform["z"]]), obs["time"]))
+        #if arrow found
+        if arrow:
+            #get arrow location
+            arrow_vec = np.asarray([arrow["x"], arrow["y"], arrow["z"]])
+            #if first arrow data or different from previous arrow data
+            #avoid appending duplicate adjacent data
+            
+            if len(self.arrow_data) == 0 or not np.array_equal(arrow_vec,self.arrow_data[-1][0]):
+                self.arrow_data.append((arrow_vec, obs["time"]))
+        return None
+
+  
 class MalmoAgent():
 
     def __init__(self, name, agent, pitch, yaw, vert_step_size, hori_step_size, model=None, data_set=None):
@@ -131,7 +202,6 @@ class MalmoAgent():
         self.hori_errors = []
         self.vert_errors = []
         self.model = model
-        self.end_mission = False
 
         #Decide if we need to get data for vertical shots
         if self.data_set:
@@ -142,12 +212,244 @@ class MalmoAgent():
         else:
             self.vert_angle_step = 0
 
+        #shooter parameters
+        self.reset_shoot_loop()
+
+    def reset_shoot_loop(self):
+        self.min_aim_duration = 15
+        self.max_record_duration = 50 #ticks
+        self.shoot_state = AIMING
+        self.aim_timer = 0
+        self.shoot_timer = 0
+        self.aim_on_target_ticks = 0
+        self.end_mission = False
+        
+        self.yaw_damp = 1
+        self.pitch_damp = 1
+        self.listen_for_new_arrow = False
+        self.arrow_ids = set()
+        self.arrow_trackers = []
+
     def step(self, obs):
         #Run this once a tick
         if(obs is not None):
             self.set_obs(obs)
         self.total_time += 1
         self.process_commands(self.total_time)
+
+
+    def shooter_step(self, obs, move_agent, target_transform):
+        '''
+        This function:
+        1. calls step()
+        2. aims at targets
+        3. shoots when aiming at target
+        4. finds id of nearly fired arrows
+        5. calls the step function of all arrow trackers
+              -arrow trackers call record_data()
+        '''
+        self.step(obs)
+        #aims over max_aim_duration many ticks
+        if self.shoot_state == AIMING:
+            if self.aim_timer < self.min_aim_duration:
+                if self.aim_timer == 0:
+                    #Calculate desired aim once at start of aiming loop
+                    #aim_iteration is used to calculate rotation speed
+                    self.calculate_desired_aim(target_transform)
+                
+                    self.agent.sendCommand("use 1")
+                    self.yaw_damp = 1
+                    self.pitch_damp = 1
+                    
+                self.aim_timer += 1
+                aiming_complete = self.aim_step(self.desired_yaw, self.desired_pitch)
+            else:
+                self.aim_timer = 0
+                self.aim_on_target_ticks = 0
+                self.shoot_state = SHOOT
+
+
+        #Shoot if done aiming
+        if self.shoot_state == SHOOT:
+            self.agent.sendCommand("use 0")
+            if self.shoot_timer < 2:
+                self.shoot_timer += 1
+            else:
+                self.shoot_timer = 0
+                self.shoot_state = AIMING
+                self.listen_for_new_arrow = True
+
+        #Find newly fired arrows
+        if self.listen_for_new_arrow:
+            #An arrow has just been shot, so look through the observations and find it
+            arrow = find_new_arrow(self._obs["Mobs"],self.arrow_ids)
+            if arrow != None:
+                #add to set and stop listening for arrows
+                self.arrow_ids.add(arrow["id"])
+                self.arrow_trackers.append(ArrowTracker(self,arrow["id"]))
+                self.listen_for_new_arrow = False
+                
+        #Track positions of all arrows in flight
+        self.track_arrows_step(move_agent,target_transform)
+
+
+
+    def calculate_desired_aim(self, target_transform):
+        distance = vert_distance(target_transform["x"], target_transform["z"], self.transform["x"], self.transform["z"])
+        elevation = target_transform["y"] - self.transform["y"]
+        obs_angle = get_hori_angle(self.transform["x"], self.transform["z"], target_transform["x"], target_transform["z"])
+        #x_velocity = project_vector(np.asarray([target_transform["motionX"], target_transform["motionY"], target_transform["motionZ"]]), vector_from_angle(self.transform["yaw"]))[0]
+        x_velocity = 0
+        #set desired pitch
+        self.desired_pitch = self.get_first_vert_shot(distance, elevation+1)
+        #set desired yaw
+        self.desired_yaw = self.get_first_hori_shot(obs_angle, distance, x_velocity)
+
+
+        self.last_shot = time.time()
+
+
+
+    def aim_step(self, desiredYaw, desiredPitch):
+        '''
+        Set pitch and yaw movement for a single tick.
+        Returns true if aiming is complete
+        '''
+        if desiredYaw == None and desiredPitch == None:
+            return
+        
+        yaw_speed = 1
+        pitch_speed = 1      
+        dampening_factor = 0.4
+        
+        #Get current yaw and pitch
+        current_yaw = self.transform["yaw"]
+        current_pitch = self.transform["pitch"]
+        #Calculate difference in yaw and pitch to desired angle
+        yaw_diff = 0
+        if desiredYaw != None:
+            yaw_diff = desiredYaw - current_yaw
+        pitch_diff = 0
+        if desiredPitch != None:
+            pitch_diff = desiredPitch - current_pitch
+
+        #If aiming at the right angle, return true
+        allowable_deviation = 1.2 #degrees
+        aim_curve_exp = 2
+        '''
+        The curve from [0,1] is modified by exponentiating the value.
+        This adjusts speeds when near 0 or near 1.
+        '''
+        #self.yaw_damp *= dampening_factor 
+        #self.pitch_damp *= dampening_factor 
+        
+        if abs(yaw_diff) < allowable_deviation:
+            self.agent.sendCommand("turn 0")
+        else:
+            #set aim direction
+            yaw_multiplier = 1
+            if yaw_diff > 180:
+                yaw_diff = yaw_diff - 360
+            yaw_multiplier = -1 if yaw_diff < 0 else 1
+
+            #set aim velocity
+            yaw_perc = clamp(0,1,abs(yaw_diff)/55)
+            yaw_perc = logistic(yaw_perc)
+            yaw_speed = clamped_lerp(0.006,.15,yaw_perc)
+            self.agent.sendCommand("turn " + str(yaw_multiplier * yaw_speed))
+
+        if abs(pitch_diff) < allowable_deviation:
+            self.agent.sendCommand("pitch 0")
+        else:
+            #set aim direction
+            pitch_multiplier = -1 if pitch_diff < 0 else 1
+
+            #set aim velocity
+            pitch_perc = clamp(0,1,abs(pitch_diff)/40)
+            pitch_perc = logistic(pitch_perc)
+            pitch_speed = clamped_lerp(0.006,.15,pitch_perc)
+
+            self.agent.sendCommand("pitch " + str( pitch_multiplier * pitch_speed))
+       
+
+
+        
+        if (abs(yaw_diff) < allowable_deviation and abs(pitch_diff) < allowable_deviation):
+            #Aim is good when the aim has been on the target angle for two consecutive ticks.
+            #This is to counteract times when aim is correct but current look velocity
+            #is too high so it throws off the aim before the stop command is issued
+            if self.aim_on_target_ticks >= 4:
+                    return True   
+            else:
+                self.aim_on_target_ticks += 1
+                return False
+
+                
+        
+          
+        #Aim not yet finished, return false and keep iterating
+        self.aim_on_target_ticks = 0
+        return False
+
+    def track_arrows_step(self,move_agent, target_transform):
+        move_agent.set_obs(load_grid(move_agent.agent))
+        mover_obs = move_agent._obs
+        #Iterate through arrow trackers
+        for tracker in self.arrow_trackers:
+            tracker.step(target_transform, mover_obs)
+        #Delete any completed trackers
+        for i in reversed(range(len(self.arrow_trackers))):
+            if self.arrow_trackers[i].delete_me:
+                self.arrow_trackers.pop(i)
+
+    def analyze_arrow_trajectory(self, target_transform, data, target_data):        
+        player_loc = np.asarray([self.transform["x"], self.transform["y"], self.transform["z"]])
+        
+        vert_error = 0
+        hori_error = 0
+        if len(data) > 0:
+            target_loc = np.asarray([target_transform["x"], target_transform["y"], target_transform["z"]])
+            abs_velocity = (target_data[-1][0] - target_data[0][0]) / (target_data[-1][1] - target_data[0][1])
+            target_velocity = project_vector(abs_velocity, vector_from_angle(self.transform["yaw"]))
+            closest_point = get_closest_point(data, target_loc)
+            last_distance_from_player = 0
+            current_distance_from_player = 0
+
+            #Count the number of instances where distance to arrow decreases
+            reverse_ticks = 0
+            
+            for i in range(len(data)):
+                if self.desired_pitch < 85 and (i == 0 or not np.array_equal(data[i][0], data[i-1][0])):
+                    self.data_set.vert_shots[1].append([magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]])), data[i][0][1] - self.transform["y"], self.desired_pitch])
+                    pred_location = data[i][0] - abs_velocity*(data[i][1]-self.last_shot)
+                    self.data_set.hori_shots[1].append([get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]), \
+                                               magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]])), target_velocity[0], self.desired_yaw])
+
+
+                #get arrow position distance from shooter.  Ignore y-difference
+                current_distance_from_player = flat_distance(data[i][0]-player_loc)
+
+                #Arrow hits if arrow's distance from player decreases.  Arrow's should strictly move away from the player's shooting position if they do not hit anyone
+                if i > 1 and current_distance_from_player < last_distance_from_player:
+                    reverse_ticks += 1
+
+                #Update previous position
+                last_distance_from_player = current_distance_from_player
+
+            vert_error = closest_point[1] - target_loc[1]
+            hori_error = get_hori_angle(self.transform["x"], self.transform["z"], closest_point[0], closest_point[2]) - \
+                        get_hori_angle(self.transform["x"], self.transform["z"], target_loc[0], target_loc[2])
+            hori_error = ((hori_error + 180) % 360) - 180
+
+            self.vert_errors.append(vert_error)
+            self.hori_errors.append(hori_error)
+            #An arrow hits the target if it has moved backward for more than 2 ticks
+            #(Arrows that hit nothing decrease in distance for 1-2 ticks)
+            if reverse_ticks > 2:
+                self.end_mission = True
+
+        return -((vert_error**2 + hori_error**2)**0.5)
+    
 
     def reset(self):
         #Reset the time for commands
@@ -372,7 +674,7 @@ class MalmoAgent():
 
                 #Update previous position
                 last_distance_from_player = current_distance_from_player
-                
+
             vert_error = closest_point[1] - target_loc[1]
             hori_error = get_hori_angle(self.transform["x"], self.transform["z"], closest_point[0], closest_point[2]) - \
                         get_hori_angle(self.transform["x"], self.transform["z"], target_loc[0], target_loc[2])

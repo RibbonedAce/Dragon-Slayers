@@ -169,6 +169,7 @@ class Mission():
         # Loop until mission starts:
         print("Waiting for the mission to start ")
         world_state = agents[0].getWorldState()
+        error_ticks = 0
         while not world_state.has_mission_begun:
             #sys.stdout.write(".")
             time.sleep(0.1)
@@ -176,6 +177,10 @@ class Mission():
                 
             for error in world_state.errors:
                 print("Error:",error.text)
+            if len(world_state.errors) > 0:
+                error_ticks += 1
+            if error_ticks >= 5:
+                return self.load_duo_mission(mission,agents)
             
 
            
