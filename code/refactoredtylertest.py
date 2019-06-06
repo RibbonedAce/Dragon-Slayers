@@ -64,7 +64,7 @@ def sleep_until(desired_time):
 malmo.minecraftbootstrap.launch_minecraft([10001, 10002])
 
 # Create default Malmo objects:
-graphing = False
+graphing = True
 my_mission = StaticFlyingTargetMission()
 agents = my_mission.two_agent_init()
 iterations = 20
@@ -132,6 +132,9 @@ FileIO.save_data("model",model)
 FileIO.save_data("dataset",data_set)
 # Graph results
 if graphing:
+    Graphing.FitData(data_set.hori_shots[0] + data_set.hori_shots[1])
+    Graphing.HorizontalDataGraph()
+    Graphing.HorizontalPredictionGraph()
     Graphing.FitData(data_set.vert_shots[0] + data_set.vert_shots[1])
     Graphing.FitErrors(shoot_agent.vert_errors, shoot_agent.hori_errors)
     Graphing.DataGraph()
