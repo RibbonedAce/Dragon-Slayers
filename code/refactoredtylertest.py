@@ -23,8 +23,6 @@ from timekeeper import TimeKeeper
 import pickle
 import os.path
 
-    
-    
 
 def load_grid(agent):
     global world_state
@@ -43,7 +41,7 @@ def load_grid(agent):
         if world_state.number_of_observations_since_last_state > 0 and \
            json.loads(world_state.observations[-1].text):
             result = json.loads(world_state.observations[-1].text)
-            result["time"] = int(round(time.time() * 1000))
+            result["time"] = time.time()
             return result
 
         keeper.advance_by(0.05)
@@ -64,7 +62,7 @@ def sleep_until(desired_time):
 malmo.minecraftbootstrap.launch_minecraft([10001, 10002])
 
 # Create default Malmo objects:
-graphing = True
+graphing = False
 my_mission = StaticFlyingTargetMission()
 agents = my_mission.two_agent_init()
 iterations = 20
@@ -96,6 +94,7 @@ try:
         initial_delay = 50
         
         world_state = shoot_agent.agent.peekWorldState()
+        shoot_obs = load_grid(shoot_agent.agent)
         while world_state.is_mission_running:
             obs = load_grid(move_agent.agent)
             if not obs:
@@ -105,7 +104,7 @@ try:
             while(initial_delay > 0):
                 initial_delay -= 1
                 keeper.advance_by(0.05)
-                shoot_agent.step(obs)
+                shoot_agent.step(shoot_obs)
                 move_agent.step(obs)
 
 
@@ -120,6 +119,11 @@ try:
                 print("Ending mission early...")
                 break
             keeper.advance_by(0.05)
+            #Change mover direction
+            my_mission.ai_step(move_agent)
+            
+            #delay to properly find velocity
+            time.sleep(1)
         print()
         print("Mission ended")
             # Mission has ended.

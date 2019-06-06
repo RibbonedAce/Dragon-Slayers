@@ -95,7 +95,7 @@ def get_angle_between(vector1, vector2):
     return math.degrees(math.acos(prod/(mag1*mag2)))
 
 def vector_from_angle(angle):
-    return np.asarray([math.cos(math.radians(angle+180)), 0, math.sin(math.radians(angle))])
+    return np.asarray([math.sin(math.radians(angle+180)), 0, math.cos(math.radians(angle))])
 
 def project_vector(vector1, vector2):
     prod = np.dot(vector1, vector2)
@@ -104,42 +104,24 @@ def project_vector(vector1, vector2):
 
 def get_closest_point(curve, target):
     '''
-    Get closest point on a curve to a target point.
+    Get closest points based on two lists of locations at times.
     Curve is a list of points that define a trajectory.
-    Returns the closest point on the set of segments created by curve to the target point
+    Target is a list of points that define the target location.
+    Returns the 2 closest points on the list of segments at a given time.
     ''' 
-    if len(curve) == 0:
-        print("Got closest point with empty list")
+    
+    if len(curve) == 0 or len(target) == 0:
         return None
-    if len(curve) == 1:
-        return curve[0][0]
-    
-    point1, point2 = None, None
-    dist1, dist2 = 9999, 9999
-    for i in range(len(curve)):
-        dist = magnitude(curve[i][0] - target)
-        if dist < dist1:
-            dist2 = dist1
-            point2 = point1
-            dist1 = dist
-            point1 = curve[i][0]
-        elif dist < dist2:
-            dist2 = dist
-            point2 = curve[i][0]
 
-    if magnitude(point2 - point1) == 0:
-        return point1
-    
-    angle1 = get_angle_between(point2 - point1, target - point1)
-    if angle1 > 90:
-        return point1
-    if get_angle_between(point1 - point2, target - point2) > 90:
-        return point2
-    angle2 = 180 - 90 - angle1
-    side = dist1 * math.sin(math.radians(angle2)) / math.sin(math.radians(90))
-    interp = side / magnitude(point2 - point1)
-    
-    return point1 * interp + point2 * (1 - interp)
+    point1, point2 = curve[0][0], target[0][0]
+    min_distance = magnitude(point1 - point2)
+    for i in range(1, len(curve)):
+        dist = magnitude(curve[i][0] - target[i][0])
+        if dist < min_distance:
+            point1, point2 = curve[i][0], target[i][0]
+            min_distance = dist
+
+    return point1, point2
 
 AIMING = 0
 SHOOT = 1
@@ -204,7 +186,7 @@ class MalmoAgent():
         self.model = model
 
         #Decide if we need to get data for vertical shots
-        if self.data_set:
+        if self.data_set and not self.data_set.empty():
             vert_shots = np.asarray(self.data_set.vert_shots[0] + self.data_set.vert_shots[1])[:,2]
             max_angle = np.max(vert_shots)
             min_angle = np.min(vert_shots)
@@ -303,7 +285,7 @@ class MalmoAgent():
         #set desired pitch
         self.desired_pitch = self.get_first_vert_shot(distance, elevation+1)
         #set desired yaw
-        self.desired_yaw = self.get_first_hori_shot(obs_angle, distance, x_velocity)
+        self.desired_yaw = self.get_first_hori_shot(obs_angle, distance, x_velocity) + self.transform["yaw"]
 
 
         self.last_shot = time.time()
@@ -457,15 +439,20 @@ class MalmoAgent():
         #Reset the time for commands
         self.total_time = 0
         self.comands = []
+        self._obs = None
         
     def set_obs(self, obs):
         if not obs:
             return
         
         has_prev = True if self._obs else False
+        prev_time = 0
+        prev_pos = None
+        prev_velocity = None
         if has_prev:
             prev_time = self._obs["time"]
             prev_pos = np.asarray([self.transform["x"], self.transform["y"], self.transform["z"]])
+            prev_velocity = np.asarray([self.transform["motionX"], self.transform["motionY"], self.transform["motionZ"]])
             
         self._obs = obs
         for entity in self._obs["Mobs"]:
@@ -473,11 +460,17 @@ class MalmoAgent():
                 self.transform = entity
                 
                 if has_prev:
-                    new_pos = np.asarray([self.transform["x"], self.transform["y"], self.transform["z"]])
-                    velocity = (new_pos - prev_pos) / (self._obs["time"] - prev_time)
-                    self.transform["motionX"] = velocity[0]
-                    self.transform["motionY"] = velocity[1]
-                    self.transform["motionZ"] = velocity[2]
+                    if prev_time != self._obs["time"]:
+                        new_pos = np.asarray([self.transform["x"], self.transform["y"], self.transform["z"]])
+                        velocity = (new_pos - prev_pos) / (self._obs["time"] - prev_time)
+                        self.transform["motionX"] = velocity[0]
+                        self.transform["motionY"] = velocity[1]
+                        self.transform["motionZ"] = velocity[2]
+                    else:
+                        self.transform["motionX"] = prev_velocity[0]
+                        self.transform["motionY"] = prev_velocity[1]
+                        self.transform["motionZ"] = prev_velocity[2]
+                    
             
     def fill_inventory(self):
         result = ""
@@ -514,7 +507,7 @@ class MalmoAgent():
         if array.shape[0] > 100:
             poly = PolynomialFeatures(2, include_bias=False).fit(array[:,:-1])
             self.model = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,-1])
-            return self.model.predict(poly.transform([[angle, distance, x_velocity]]))[0]
+            return min(max(-180, self.model.predict(poly.transform([[angle, distance, x_velocity]]))[0]), 180)
         
         return random.randrange(-180, 180)
 
@@ -582,18 +575,22 @@ class MalmoAgent():
                 command[0].sendCommand(command[1])
 
 
-    def shoot_at_target(self, target_transform):
+    def shoot_at_target(self, target):
         '''
         Aims and shoots at target point
 
         '''
-        
+
         if not self._obs:
             return
+
+        target.set_obs(load_grid(target.agent))
+        target_transform = target.transform
         distance = vert_distance(target_transform["x"], target_transform["z"], self.transform["x"], self.transform["z"])
         elevation = target_transform["y"] - self.transform["y"]
-        obs_angle = get_hori_angle(self.transform["x"], self.transform["z"], target_transform["x"], target_transform["z"])
-        x_velocity = project_vector(np.asarray([target_transform["motionX"], target_transform["motionY"], target_transform["motionZ"]]), vector_from_angle(self.transform["yaw"]))[0]
+        obs_angle = ((get_hori_angle(self.transform["x"], self.transform["z"], target_transform["x"], target_transform["z"]) - self.transform["yaw"] + 180) % 360) - 180
+        x_angle = ((obs_angle + 180 + 90) % 360) - 180
+        x_velocity = project_vector(np.asarray([target_transform["motionX"], target_transform["motionY"], target_transform["motionZ"]]), vector_from_angle(x_angle))[0] / vector_from_angle(x_angle)[0]
         self.agent.sendCommand("use 1")
         
         #if self.total_time < 30 or len(self.vert_shots[0] + self.vert_shots[1]) > 5:
@@ -609,10 +606,13 @@ class MalmoAgent():
             #self.vert_step_size *= 0.8
 
         self.last_shot = time.time()
-        self.set_yaw_and_pitch(self.desired_yaw, -self.desired_pitch)
+        last_yaw = self.transform["yaw"]
+        self.set_yaw_and_pitch(((self.transform["yaw"] + self.desired_yaw + 180) % 360) - 180, -self.desired_pitch)
         self.agent.sendCommand("use 0")
 
-    def record_data(self, target_transform, other=None):
+        return [x_velocity, last_yaw]
+
+    def record_data(self, target_transform, obs, other=None):
         if not other:
             other = self
         
@@ -648,8 +648,8 @@ class MalmoAgent():
         
         vert_error = 0
         hori_error = 0
-        if len(data) > 0:
-            target_loc = np.asarray([target_transform["x"], target_transform["y"], target_transform["z"]])
+        if len(data) > 0 and target_data[-1][1] > target_data[0][1]:
+            
             abs_velocity = (target_data[-1][0] - target_data[0][0]) / (target_data[-1][1] - target_data[0][1])
             target_velocity = project_vector(abs_velocity, vector_from_angle(self.transform["yaw"]))
             closest_point = get_closest_point(data, target_loc)
@@ -661,12 +661,9 @@ class MalmoAgent():
             
             for i in range(len(data)):
                 if self.desired_pitch < 85 and (i == 0 or not np.array_equal(data[i][0], data[i-1][0])):
-                    self.data_set.vert_shots[1].append([magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]])), data[i][0][1] - self.transform["y"], self.desired_pitch])
+                    d_distance = magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]]))
+                    d_elevation = data[i][0][1] - self.transform["y"]
                     pred_location = data[i][0] - abs_velocity*(data[i][1]-self.last_shot)
-                    self.data_set.hori_shots[1].append([get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]), \
-                                               magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]])), target_velocity[0], self.desired_yaw])
-
-
                 #get arrow position distance from shooter.  Ignore y-difference
                 current_distance_from_player = flat_distance(data[i][0]-player_loc)
 
@@ -676,7 +673,10 @@ class MalmoAgent():
 
                 #Update previous position
                 last_distance_from_player = current_distance_from_player
-
+                d_angle = ((get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]) - obs[1] + 180) % 360) - 180
+                self.data_set.vert_shots[1].append([d_distance, d_elevation, self.desired_pitch])
+                self.data_set.hori_shots[1].append([d_angle, d_distance, obs[0], self.desired_yaw])
+            closest_point, target_loc = get_closest_point(data, target_data)
             vert_error = closest_point[1] - target_loc[1]
             hori_error = get_hori_angle(self.transform["x"], self.transform["z"], closest_point[0], closest_point[2]) - \
                         get_hori_angle(self.transform["x"], self.transform["z"], target_loc[0], target_loc[2])

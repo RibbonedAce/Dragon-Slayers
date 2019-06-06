@@ -6,6 +6,9 @@ class DataSet():
         self.hori_shots = horizontal_shots
         self.vert_shots = vertical_shots
 
+    def empty(self):
+        return self.hori_shots == [[], []] or self.vert_shots == [[], []]
+
 
 
     def clear_horizontal_static_shots(self):
@@ -31,7 +34,5 @@ class DataSet():
         for i in reversed(range(len(self.vert_shots[1]))):
             if(abs(self.vert_shots[1][2]) >= 0.1):
                 self.vert_shots[1].pop(i)
-
-    
 
     
