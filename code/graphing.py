@@ -24,8 +24,22 @@ class Graphing:
         plt.ylabel("Elevation")
         plt.show()
 
+    def HorizontalDataGraph():
+        #Hori_shots append (horz_angle_between shooter and target, distance to target, target's tangential velocity, aiming_yaw)
+        assert not Graphing.array is None, "Need to fit data points; use Graphing.FitData"
+        colors = [(min(max(0, 2 - 4*s/45), 1), \
+                   min(max(0, 2 - abs((4*s-90)/45)), 1), \
+                   min(max(0, 4*s/45 - 2), 1)) for s in Graphing.array[:,3]]
+        #graph on tangential velocity vs target's distance
+        plt.scatter(Graphing.array[:,2], Graphing.array[:,1], c=colors, alpha=0.5)
+        plt.title("Horizontal Angle Regression Data")
+        plt.xlabel("Tangential Velocity")
+        plt.ylabel("Distance")
+        plt.show()
+
     def PredictionGraph():
         assert not Graphing.array is None, "Need to fit data points; use Graphing.FitData"
+        #Vert_shots append (distance from target, difference in Y between shooter and target, aiming_pitch)
         poly = PolynomialFeatures(2, include_bias=False).fit(Graphing.array[:,:-1])
         predictor = LinearRegression().fit(poly.transform(Graphing.array[:,:-1]), Graphing.array[:,-1])
         xSpace = np.linspace(0, Graphing.array[:,0].max(), 100)
@@ -42,6 +56,28 @@ class Graphing:
         plt.title("Vertical Angle Regression Predictions")
         plt.xlabel("Distance")
         plt.ylabel("Elevation")
+        plt.show()
+
+
+    def HorizontalPredictionGraph():
+        assert not Graphing.array is None, "Need to fit data points; use Graphing.FitData"
+        #Hori_shots append (horz_angle_between shooter and target, distance to target, target's tangential velocity, aiming_yaw)
+        poly = PolynomialFeatures(2, include_bias=False).fit(Graphing.array[:,1:-1])
+        predictor = LinearRegression().fit(poly.transform(Graphing.array[:,1:-1]), Graphing.array[:,-1])
+        xSpace = np.linspace(0, Graphing.array[:,1].max(), 100)
+        ySpace = np.linspace(Graphing.array[:,2].min(), Graphing.array[:,2].max(), 100)
+        xx, yy = np.meshgrid(xSpace, ySpace)
+        zz = np.zeros(xx.shape)
+        for i in range(xx.shape[0]):
+            for j in range(xx.shape[1]):
+                zz[i][j] = predictor.predict(poly.transform([[xx[i,j], yy[i,j]]]))[0]
+        zz.reshape(xx.shape)
+        cs = plt.contourf(xx, yy, zz, levels=[10*i for i in range(-18,19)])
+        cbar = plt.colorbar(cs)
+        cbar.ax.set_ylabel("Desired Horizontal angle")
+        plt.title("Horizontal Angle Regression Predictions")
+        plt.xlabel("Distance")
+        plt.ylabel("Tangential Velocity")
         plt.show()
 
     def ErrorGraph():

@@ -420,9 +420,10 @@ class MalmoAgent():
             
             for i in range(len(data)):
                 if self.desired_pitch < 85 and (i == 0 or not np.array_equal(data[i][0], data[i-1][0])):
+                    #Vert_shots append (distance from closest arrow position to target, difference in Y between shooter and target, aiming_pitch)
                     self.data_set.vert_shots[1].append([magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]])), data[i][0][1] - self.transform["y"], self.desired_pitch])
                     pred_location = data[i][0] - abs_velocity*(data[i][1]-self.last_shot)
-                    #Hori_shots append (horz_angle_between shooter and target, distance to target, target's tangential velocity, aiming_yaw)
+                    #Hori_shots append (horz_angle_between shooter and target, distance from nearest arrow position to target, target's tangential velocity, aiming_yaw)
                     self.data_set.hori_shots[1].append([get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]), \
                                                magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]])), target_velocity[0], self.desired_yaw])
 
