@@ -229,7 +229,9 @@ class MalmoAgent():
         4. finds id of nearly fired arrows
         5. calls the step function of all arrow trackers
               -arrow trackers call record_data()
+        6. returns whether a new shot has started
         '''
+        result = False
         self.step(obs)
         #aims over max_aim_duration many ticks
         if self.shoot_state == AIMING:
@@ -240,6 +242,7 @@ class MalmoAgent():
                     self.agent.sendCommand("use 1")
                     self.yaw_damp = 1
                     self.pitch_damp = 1
+                    result = True
                     
                 self.calculate_desired_aim(target_transform)
                 self.aim_timer += 1
@@ -273,7 +276,7 @@ class MalmoAgent():
                 
         #Track positions of all arrows in flight
         self.track_arrows_step(move_agent,target_transform)
-
+        return result
 
 
     def calculate_desired_aim(self, target_transform):
@@ -286,7 +289,6 @@ class MalmoAgent():
         self.desired_pitch = self.get_first_vert_shot(distance, elevation+1)
         #set desired yaw
         self.desired_yaw = self.get_first_hori_shot(obs_angle, distance, x_velocity)
-        print(self.desired_yaw)
 
         self.last_shot = time.time()
 

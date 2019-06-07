@@ -63,7 +63,7 @@ malmo.minecraftbootstrap.launch_minecraft([10001, 10002])
 
 # Create default Malmo objects:
 graphing = False
-my_mission = StaticFlyingTargetMission()
+my_mission = XStrafingTargetMission()
 agents = my_mission.two_agent_init()
 iterations = 20
 vert_step_size = 0.5
@@ -109,7 +109,9 @@ try:
 
             target = find_mob_by_name(obs["Mobs"],"Mover")
             #agent step
-            shoot_agent.shooter_step(obs, move_agent, target)
+            if shoot_agent.shooter_step(obs, move_agent, target):
+                #Change mover direction
+                my_mission.ai_step(move_agent)
             move_agent.step(obs)
             
             #If shoot agent hits target, end mission early
@@ -118,8 +120,6 @@ try:
                 print("Ending mission early...")
                 break
             keeper.advance_by(0.05)
-            #Change mover direction
-            my_mission.ai_step(move_agent)
             
         print()
         print("Mission ended")
