@@ -91,7 +91,6 @@ try:
         
         my_mission.chat_command_init(shoot_agent,move_agent,params)
         shoot_agent.agent.sendCommand("use 1")
-        initial_delay = 50
         
         world_state = shoot_agent.agent.peekWorldState()
         shoot_obs = load_grid(shoot_agent.agent)
@@ -100,12 +99,7 @@ try:
             if not obs:
                 break
             
-            #initial delay runs once per mission
-            while(initial_delay > 0):
-                initial_delay -= 1
-                keeper.advance_by(0.05)
-                shoot_agent.step(shoot_obs)
-                move_agent.step(obs)
+           
 
             target = find_mob_by_name(obs["Mobs"],"Mover")
             #agent step
