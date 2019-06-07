@@ -107,7 +107,6 @@ try:
                 shoot_agent.step(shoot_obs)
                 move_agent.step(obs)
 
-
             target = find_mob_by_name(obs["Mobs"],"Mover")
             #agent step
             shoot_agent.shooter_step(obs, move_agent, target)
@@ -122,8 +121,6 @@ try:
             #Change mover direction
             my_mission.ai_step(move_agent)
             
-            #delay to properly find velocity
-            time.sleep(1)
         print()
         print("Mission ended")
             # Mission has ended.

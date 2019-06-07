@@ -243,7 +243,7 @@ class MalmoAgent():
                     
                 self.calculate_desired_aim(target_transform)
                 self.aim_timer += 1
-                aiming_complete = self.aim_step(self.desired_yaw, self.desired_pitch)
+                aiming_complete = self.aim_step(((self.transform["yaw"] + self.desired_yaw + 180) % 360) - 180, -self.desired_pitch)
                 
             else:
                 self.aim_timer = 0
@@ -279,16 +279,19 @@ class MalmoAgent():
     def calculate_desired_aim(self, target_transform):
         distance = vert_distance(target_transform["x"], target_transform["z"], self.transform["x"], self.transform["z"])
         elevation = target_transform["y"] - self.transform["y"]
-        obs_angle = get_hori_angle(self.transform["x"], self.transform["z"], target_transform["x"], target_transform["z"])
-        #x_velocity = project_vector(np.asarray([target_transform["motionX"], target_transform["motionY"], target_transform["motionZ"]]), vector_from_angle(self.transform["yaw"]))[0]
-        x_velocity = 0
+        obs_angle = ((get_hori_angle(self.transform["x"], self.transform["z"], target_transform["x"], target_transform["z"]) - self.transform["yaw"] + 180) % 360) - 180
+        x_angle = ((obs_angle + 180 + 90) % 360) - 180
+        x_velocity = project_vector(np.asarray([target_transform["motionX"], target_transform["motionY"], target_transform["motionZ"]]), vector_from_angle(x_angle))[0] / vector_from_angle(x_angle)[0]
         #set desired pitch
         self.desired_pitch = self.get_first_vert_shot(distance, elevation+1)
         #set desired yaw
-        self.desired_yaw = self.get_first_hori_shot(obs_angle, distance, x_velocity) + self.transform["yaw"]
-
+        self.desired_yaw = self.get_first_hori_shot(obs_angle, distance, x_velocity)
+        print(self.desired_yaw)
 
         self.last_shot = time.time()
+
+        #Store some data points now to use for future data points
+        self.stored_data = [x_velocity, self.transform["yaw"]]
 
 
 
@@ -390,10 +393,8 @@ class MalmoAgent():
         vert_error = 0
         hori_error = 0
         if len(data) > 0:
-            target_loc = np.asarray([target_transform["x"], target_transform["y"], target_transform["z"]])
             abs_velocity = (target_data[-1][0] - target_data[0][0]) / (target_data[-1][1] - target_data[0][1])
             target_velocity = project_vector(abs_velocity, vector_from_angle(self.transform["yaw"]))
-            closest_point = get_closest_point(data, target_loc)
             last_distance_from_player = 0
             current_distance_from_player = 0
 
@@ -402,13 +403,21 @@ class MalmoAgent():
             
             for i in range(len(data)):
                 if self.desired_pitch < 85 and (i == 0 or not np.array_equal(data[i][0], data[i-1][0])):
-                    #Vert_shots append (distance from closest arrow position to target, difference in Y between shooter and target, aiming_pitch)
-                    self.data_set.vert_shots[1].append([magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]])), data[i][0][1] - self.transform["y"], self.desired_pitch])
+                    d_distance = magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]]))
+                    d_elevation = data[i][0][1] - self.transform["y"]
                     pred_location = data[i][0] - abs_velocity*(data[i][1]-self.last_shot)
-                    #Hori_shots append (horz_angle_between shooter and target, distance from nearest arrow position to target, target's tangential velocity, aiming_yaw)
-                    self.data_set.hori_shots[1].append([get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]), \
-                                               magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]])), target_velocity[0], self.desired_yaw])
+                    #get arrow position distance from shooter.  Ignore y-difference
+                    current_distance_from_player = flat_distance(data[i][0]-player_loc)
 
+                    #Arrow hits if arrow's distance from player decreases.  Arrow's should strictly move away from the player's shooting position if they do not hit anyone
+                    if i > 1 and current_distance_from_player < last_distance_from_player:
+                        reverse_ticks += 1
+
+                    #Update previous position
+                    last_distance_from_player = current_distance_from_player
+                    d_angle = ((get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]) - self.stored_data[1] + 180) % 360) - 180
+                    self.data_set.vert_shots[1].append([d_distance, d_elevation, self.desired_pitch])
+                    self.data_set.hori_shots[1].append([d_angle, d_distance, self.stored_data[0], self.desired_yaw])
 
                 #get arrow position distance from shooter.  Ignore y-difference
                 current_distance_from_player = flat_distance(data[i][0]-player_loc)
@@ -420,6 +429,8 @@ class MalmoAgent():
                 #Update previous position
                 last_distance_from_player = current_distance_from_player
 
+            #Append errors depending on how close the arrow got
+            closest_point, target_loc = get_closest_point(data, target_data)
             vert_error = closest_point[1] - target_loc[1]
             hori_error = get_hori_angle(self.transform["x"], self.transform["z"], closest_point[0], closest_point[2]) - \
                         get_hori_angle(self.transform["x"], self.transform["z"], target_loc[0], target_loc[2])
@@ -427,6 +438,7 @@ class MalmoAgent():
 
             self.vert_errors.append(vert_error)
             self.hori_errors.append(hori_error)
+            self.commands.append((self.agent, "chat /kill @e[type=!player]", self.total_time + 0))
             #An arrow hits the target if it has moved backward for more than 2 ticks
             #(Arrows that hit nothing decrease in distance for 1-2 ticks)
             if reverse_ticks > 2:
@@ -660,22 +672,22 @@ class MalmoAgent():
             reverse_ticks = 0
             
             for i in range(len(data)):
-                if self.desired_pitch < 85 and (i == 0 or not np.array_equal(data[i][0], data[i-1][0])):
+                if i == 0 or not np.array_equal(data[i][0], data[i-1][0]):
                     d_distance = magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]]))
                     d_elevation = data[i][0][1] - self.transform["y"]
                     pred_location = data[i][0] - abs_velocity*(data[i][1]-self.last_shot)
-                #get arrow position distance from shooter.  Ignore y-difference
-                current_distance_from_player = flat_distance(data[i][0]-player_loc)
+                    #get arrow position distance from shooter.  Ignore y-difference
+                    current_distance_from_player = flat_distance(data[i][0]-player_loc)
 
-                #Arrow hits if arrow's distance from player decreases.  Arrow's should strictly move away from the player's shooting position if they do not hit anyone
-                if i > 1 and current_distance_from_player < last_distance_from_player:
-                    reverse_ticks += 1
+                    #Arrow hits if arrow's distance from player decreases.  Arrow's should strictly move away from the player's shooting position if they do not hit anyone
+                    if i > 1 and current_distance_from_player < last_distance_from_player:
+                        reverse_ticks += 1
 
-                #Update previous position
-                last_distance_from_player = current_distance_from_player
-                d_angle = ((get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]) - obs[1] + 180) % 360) - 180
-                self.data_set.vert_shots[1].append([d_distance, d_elevation, self.desired_pitch])
-                self.data_set.hori_shots[1].append([d_angle, d_distance, obs[0], self.desired_yaw])
+                    #Update previous position
+                    last_distance_from_player = current_distance_from_player
+                    d_angle = ((get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]) - obs[1] + 180) % 360) - 180
+                    self.data_set.vert_shots[1].append([d_distance, d_elevation, self.desired_pitch])
+                    self.data_set.hori_shots[1].append([d_angle, d_distance, obs[0], self.desired_yaw])
             closest_point, target_loc = get_closest_point(data, target_data)
             vert_error = closest_point[1] - target_loc[1]
             hori_error = get_hori_angle(self.transform["x"], self.transform["z"], closest_point[0], closest_point[2]) - \
