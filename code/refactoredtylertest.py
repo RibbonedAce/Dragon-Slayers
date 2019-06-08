@@ -98,15 +98,14 @@ try:
             obs = load_grid(move_agent.agent)
             if not obs:
                 break
-            
+            move_agent.step(obs)
            
 
-            target = find_mob_by_name(obs["Mobs"],"Mover")
             #agent step
-            if shoot_agent.shooter_step(obs, move_agent, target):
+            if shoot_agent.shooter_step(obs, move_agent, move_agent.transform):
                 #Change mover direction
                 my_mission.ai_step(move_agent)
-            move_agent.step(obs)
+            
             
             #If shoot agent hits target, end mission early
             if shoot_agent.end_mission:

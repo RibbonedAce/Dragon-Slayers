@@ -92,7 +92,7 @@ def get_angle_between(vector1, vector2):
     mag2 = np.sqrt(np.sum(vector2**2))
     if mag1 == 0 or mag2 == 0:
         return 0
-    return math.degrees(math.acos(prod/(mag1*mag2)))
+    return math.degrees(math.acos(max(-1, min(prod/(mag1*mag2), 1))))
 
 def vector_from_angle(angle):
     return np.asarray([math.sin(math.radians(angle+180)), 0, math.cos(math.radians(angle))])
@@ -127,13 +127,15 @@ AIMING = 0
 SHOOT = 1
 class ArrowTracker():
 
-    def __init__(self, malmo_agent, arrow_id):
+    def __init__(self, malmo_agent, arrow_id, stored_data, last_angle):
         self.malmo_agent = malmo_agent
         self.arrow_id = arrow_id
         self.track_duration = 50
         self.delete_me = False
         self.target_data = []
         self.arrow_data = []
+        self.stored_data = stored_data
+        self.last_angle = last_angle
 
     def step(self, target_transform, obs):
         if self.track_duration > 0:
@@ -141,7 +143,7 @@ class ArrowTracker():
             self.track_arrow(target_transform, obs)
         else:
             self.delete_me = True
-            self.malmo_agent.analyze_arrow_trajectory(target_transform, self.arrow_data, self.target_data)
+            self.malmo_agent.analyze_arrow_trajectory(target_transform, self.arrow_data, self.target_data, self.stored_data, self.last_angle)
 
     def track_arrow(self,target_transform, obs):
         '''
@@ -179,6 +181,7 @@ class MalmoAgent():
         self.desired_pitch = pitch
         self.desired_yaw = yaw
         self.last_shot = 0
+        self.stored_data = []
         #Data set encapsulates hori_shots and vert_shots
         self.data_set = data_set
         self.hori_errors = []
@@ -211,6 +214,7 @@ class MalmoAgent():
         self.listen_for_new_arrow = False
         self.arrow_ids = set()
         self.arrow_trackers = []
+        self.last_angle = 0
 
     def step(self, obs):
         #Run this once a tick
@@ -252,7 +256,7 @@ class MalmoAgent():
                 self.aim_timer = 0
                 self.aim_on_target_ticks = 0
                 self.shoot_state = SHOOT
-
+                self.stored_data = self.current_data
 
         #Shoot if done aiming
         if self.shoot_state == SHOOT:
@@ -271,8 +275,9 @@ class MalmoAgent():
             if arrow != None:
                 #add to set and stop listening for arrows
                 self.arrow_ids.add(arrow["id"])
-                self.arrow_trackers.append(ArrowTracker(self,arrow["id"]))
+                self.arrow_trackers.append(ArrowTracker(self,arrow["id"], self.stored_data, self.last_angle))
                 self.listen_for_new_arrow = False
+            self.last_angle = self.transform["yaw"]
                 
         #Track positions of all arrows in flight
         self.track_arrows_step(move_agent,target_transform)
@@ -282,19 +287,20 @@ class MalmoAgent():
     def calculate_desired_aim(self, target_transform):
         distance = vert_distance(target_transform["x"], target_transform["z"], self.transform["x"], self.transform["z"])
         elevation = target_transform["y"] - self.transform["y"]
-        obs_angle = ((get_hori_angle(self.transform["x"], self.transform["z"], target_transform["x"], target_transform["z"]) - self.transform["yaw"] + 180) % 360) - 180
+        obs_angle = ((get_hori_angle(self.transform["x"], self.transform["z"], target_transform["x"], target_transform["z"]) + 180) % 360) - 180
+        rel_angle = ((obs_angle - self.transform["yaw"] + 180) % 360) - 180
         x_angle = ((obs_angle + 180 + 90) % 360) - 180
-        x_velocity = project_vector(np.asarray([target_transform["motionX"], target_transform["motionY"], target_transform["motionZ"]]), vector_from_angle(x_angle))[0] / vector_from_angle(x_angle)[0]
+        x_velocity = project_vector(np.asarray([target_transform["motionX"], target_transform["motionY"], target_transform["motionZ"]]), vector_from_angle(x_angle))
+        x_velocity = math.copysign(magnitude(x_velocity), math.cos(math.radians(get_angle_between(vector_from_angle(x_angle), x_velocity))))
         #set desired pitch
         self.desired_pitch = self.get_first_vert_shot(distance, elevation+1)
         #set desired yaw
-        self.desired_yaw = self.get_first_hori_shot(obs_angle, distance, x_velocity)
+        self.desired_yaw = self.get_first_hori_shot(rel_angle, distance, x_velocity)
 
         self.last_shot = time.time()
 
         #Store some data points now to use for future data points
-        self.stored_data = [x_velocity, self.transform["yaw"]]
-
+        self.current_data = [x_velocity, self.transform["yaw"]]
 
 
     def aim_step(self, desiredYaw, desiredPitch):
@@ -389,14 +395,14 @@ class MalmoAgent():
             if self.arrow_trackers[i].delete_me:
                 self.arrow_trackers.pop(i)
 
-    def analyze_arrow_trajectory(self, target_transform, data, target_data):        
+    def analyze_arrow_trajectory(self, target_transform, data, target_data, obs, last_angle):        
         player_loc = np.asarray([self.transform["x"], self.transform["y"], self.transform["z"]])
         
         vert_error = 0
         hori_error = 0
         if len(data) > 0:
             abs_velocity = (target_data[-1][0] - target_data[0][0]) / (target_data[-1][1] - target_data[0][1])
-            target_velocity = project_vector(abs_velocity, vector_from_angle(self.transform["yaw"]))
+            pred_velocity = obs[0] * vector_from_angle(((obs[1] + 180 + 90) % 360) - 180)
             last_distance_from_player = 0
             current_distance_from_player = 0
 
@@ -407,7 +413,7 @@ class MalmoAgent():
                 if self.desired_pitch < 85 and (i == 0 or not np.array_equal(data[i][0], data[i-1][0])):
                     d_distance = magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]]))
                     d_elevation = data[i][0][1] - self.transform["y"]
-                    pred_location = data[i][0] - abs_velocity*(data[i][1]-self.last_shot)
+                    pred_location = data[i][0] - pred_velocity*(data[i][1]-self.last_shot)
                     #get arrow position distance from shooter.  Ignore y-difference
                     current_distance_from_player = flat_distance(data[i][0]-player_loc)
 
@@ -417,9 +423,9 @@ class MalmoAgent():
 
                     #Update previous position
                     last_distance_from_player = current_distance_from_player
-                    d_angle = ((get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]) - self.stored_data[1] + 180) % 360) - 180
+                    d_angle = ((get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]) - last_angle + 180) % 360) - 180
                     self.data_set.vert_shots[1].append([d_distance, d_elevation, self.desired_pitch])
-                    self.data_set.hori_shots[1].append([d_angle, d_distance, self.stored_data[0], self.desired_yaw])
+                    self.data_set.hori_shots[1].append([d_angle, d_distance, obs[0], self.transform["yaw"] - last_angle])
 
                 #get arrow position distance from shooter.  Ignore y-difference
                 current_distance_from_player = flat_distance(data[i][0]-player_loc)
@@ -597,7 +603,7 @@ class MalmoAgent():
 
         if not self._obs:
             return
-
+        
         target.set_obs(load_grid(target.agent))
         target_transform = target.transform
         distance = vert_distance(target_transform["x"], target_transform["z"], self.transform["x"], self.transform["z"])
