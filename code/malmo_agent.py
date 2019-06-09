@@ -127,7 +127,7 @@ AIMING = 0
 SHOOT = 1
 class ArrowTracker():
 
-    def __init__(self, malmo_agent, arrow_id, stored_data, last_angle):
+    def __init__(self, malmo_agent, arrow_id, stored_data, aim_data):
         self.malmo_agent = malmo_agent
         self.arrow_id = arrow_id
         self.track_duration = 50
@@ -135,7 +135,8 @@ class ArrowTracker():
         self.target_data = []
         self.arrow_data = []
         self.stored_data = stored_data
-        self.last_angle = last_angle
+        self.aim_data = aim_data
+        self.count = 0
 
     def step(self, target_transform, obs):
         if self.track_duration > 0:
@@ -143,7 +144,7 @@ class ArrowTracker():
             self.track_arrow(target_transform, obs)
         else:
             self.delete_me = True
-            self.malmo_agent.analyze_arrow_trajectory(target_transform, self.arrow_data, self.target_data, self.stored_data, self.last_angle)
+            self.malmo_agent.analyze_arrow_trajectory(target_transform, self.arrow_data, self.target_data, self.stored_data, self.aim_data)
 
     def track_arrow(self,target_transform, obs):
         '''
@@ -214,7 +215,7 @@ class MalmoAgent():
         self.listen_for_new_arrow = False
         self.arrow_ids = set()
         self.arrow_trackers = []
-        self.last_angle = 0
+        self.aim_data = []
 
         #Scales turning speed
         self.turn_speed_multiplier = (1/360)* 2
@@ -241,8 +242,8 @@ class MalmoAgent():
         
         result = False
         self.step(shooter_obs)
+        self.aim_data.append((self.transform["yaw"], time.time()))
         mover_obs = move_agent._obs
-       
 
         #aims over max_aim_duration many ticks
         if self.shoot_state == AIMING:
@@ -263,11 +264,11 @@ class MalmoAgent():
                 self.aim_timer = 0
                 self.aim_on_target_ticks = 0
                 self.shoot_state = SHOOT
-                self.stored_data = self.current_data
 
         #Shoot if done aiming
         if self.shoot_state == SHOOT:
             self.agent.sendCommand("use 0")
+            self.stored_data = self.current_data
             if self.shoot_timer < 2:
                 self.shoot_timer += 1
             else:
@@ -278,13 +279,13 @@ class MalmoAgent():
         #Find newly fired arrows
         if self.listen_for_new_arrow:
             #An arrow has just been shot, so look through the observations and find it
-            arrow = find_new_arrow(self._obs["Mobs"],self.arrow_ids)
+            arrow = find_new_arrow(mover_obs["Mobs"],self.arrow_ids)
             if arrow != None:
                 #add to set and stop listening for arrows
                 self.arrow_ids.add(arrow["id"])
-                self.arrow_trackers.append(ArrowTracker(self,arrow["id"], self.stored_data, self.last_angle))
+                self.arrow_trackers.append(ArrowTracker(self,arrow["id"], self.stored_data, self.aim_data))
                 self.listen_for_new_arrow = False
-            self.last_angle = self.transform["yaw"]
+                self.aim_data = []
                 
         #Track positions of all arrows in flight
         self.track_arrows_step(mover_obs,target_transform)
@@ -303,8 +304,6 @@ class MalmoAgent():
         self.desired_pitch = self.get_first_vert_shot(distance, elevation+1)
         #set desired yaw
         self.desired_yaw = self.get_first_hori_shot(rel_angle, distance, x_velocity)
-
-        self.last_shot = time.time()
 
         #Store some data points now to use for future data points
         self.current_data = [x_velocity, self.transform["yaw"]]
@@ -386,25 +385,40 @@ class MalmoAgent():
             if self.arrow_trackers[i].delete_me:
                 self.arrow_trackers.pop(i)
 
-    def analyze_arrow_trajectory(self, target_transform, data, target_data, obs, last_angle):        
+    def analyze_arrow_trajectory(self, target_transform, data, target_data, obs, aim_data):        
         player_loc = np.asarray([self.transform["x"], self.transform["y"], self.transform["z"]])
+        pred_velocity = obs[0] * vector_from_angle(((obs[1] + 180 + 90) % 360) - 180)
         
         vert_error = 0
         hori_error = 0
         if len(data) > 0:
-            abs_velocity = (target_data[-1][0] - target_data[0][0]) / (target_data[-1][1] - target_data[0][1])
-            pred_velocity = obs[0] * vector_from_angle(((obs[1] + 180 + 90) % 360) - 180)
-            last_distance_from_player = 0
-            current_distance_from_player = 0
+            for a in aim_data:
+                #data_preds = []
+                last_distance_from_player = 0
+                current_distance_from_player = 0
 
-            #Count the number of instances where distance to arrow decreases
-            reverse_ticks = 0
-            
-            for i in range(len(data)):
-                if self.desired_pitch < 85 and (i == 0 or not np.array_equal(data[i][0], data[i-1][0])):
-                    d_distance = magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]]))
-                    d_elevation = data[i][0][1] - self.transform["y"]
-                    pred_location = data[i][0] - pred_velocity*(data[i][1]-self.last_shot)
+                #Count the number of instances where distance to arrow decreases
+                reverse_ticks = 0
+                
+                for i in range(len(data)):
+                    if self.desired_pitch < 85 and (i == 0 or not np.array_equal(data[i][0], data[i-1][0])):
+                        d_elevation = data[i][0][1] - self.transform["y"]
+                        pred_location = data[i][0] - pred_velocity*(data[i][1]-a[1])
+                        #data_preds.append(pred_location)
+                        d_distance = magnitude(pred_location[::2] - np.asarray([self.transform["x"], self.transform["z"]]))
+                        #get arrow position distance from shooter.  Ignore y-difference
+                        current_distance_from_player = flat_distance(data[i][0]-player_loc)
+
+                        #Arrow hits if arrow's distance from player decreases.  Arrow's should strictly move away from the player's shooting position if they do not hit anyone
+                        if i > 1 and current_distance_from_player < last_distance_from_player:
+                            reverse_ticks += 1
+
+                        #Update previous position
+                        last_distance_from_player = current_distance_from_player
+                        d_angle = ((get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]) - a[0] + 180) % 360) - 180
+                        self.data_set.vert_shots[1].append([d_distance, d_elevation, self.desired_pitch])
+                        self.data_set.hori_shots[1].append([d_angle, d_distance, obs[0], self.transform["yaw"] - a[0]])
+        
                     #get arrow position distance from shooter.  Ignore y-difference
                     current_distance_from_player = flat_distance(data[i][0]-player_loc)
 
@@ -414,19 +428,6 @@ class MalmoAgent():
 
                     #Update previous position
                     last_distance_from_player = current_distance_from_player
-                    d_angle = ((get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]) - last_angle + 180) % 360) - 180
-                    self.data_set.vert_shots[1].append([d_distance, d_elevation, self.desired_pitch])
-                    self.data_set.hori_shots[1].append([d_angle, d_distance, obs[0], self.transform["yaw"] - last_angle])
-
-                #get arrow position distance from shooter.  Ignore y-difference
-                current_distance_from_player = flat_distance(data[i][0]-player_loc)
-
-                #Arrow hits if arrow's distance from player decreases.  Arrow's should strictly move away from the player's shooting position if they do not hit anyone
-                if i > 1 and current_distance_from_player < last_distance_from_player:
-                    reverse_ticks += 1
-
-                #Update previous position
-                last_distance_from_player = current_distance_from_player
 
             #Append errors depending on how close the arrow got
             closest_point, target_loc = get_closest_point(data, target_data)
