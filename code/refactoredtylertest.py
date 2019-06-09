@@ -93,16 +93,16 @@ try:
         shoot_agent.agent.sendCommand("use 1")
         
         world_state = shoot_agent.agent.peekWorldState()
-        shoot_obs = load_grid(shoot_agent.agent)
         while world_state.is_mission_running:
-            obs = load_grid(move_agent.agent)
-            if not obs:
+            shooter_obs = load_grid(shoot_agent.agent)
+            mover_obs = load_grid(move_agent.agent)
+            if not shooter_obs or not mover_obs:
                 break
-            move_agent.step(obs)
+            move_agent.step(mover_obs)
            
-
+            
             #agent step
-            if shoot_agent.shooter_step(obs, move_agent, move_agent.transform):
+            if shoot_agent.shooter_step(shooter_obs, move_agent, move_agent.transform):
                 #Change mover direction
                 my_mission.ai_step(move_agent)
             

@@ -216,6 +216,9 @@ class MalmoAgent():
         self.arrow_trackers = []
         self.last_angle = 0
 
+        #Scales turning speed
+        self.turn_speed_multiplier = (1/360)* 2
+
     def step(self, obs):
         #Run this once a tick
         if(obs is not None):
@@ -224,7 +227,7 @@ class MalmoAgent():
         self.process_commands(self.total_time)
 
 
-    def shooter_step(self, obs, move_agent, target_transform):
+    def shooter_step(self, shooter_obs, move_agent, target_transform):
         '''
         This function:
         1. calls step()
@@ -235,8 +238,12 @@ class MalmoAgent():
               -arrow trackers call record_data()
         6. returns whether a new shot has started
         '''
+        
         result = False
-        self.step(obs)
+        self.step(shooter_obs)
+        mover_obs = move_agent._obs
+       
+
         #aims over max_aim_duration many ticks
         if self.shoot_state == AIMING:
             if self.aim_timer < self.min_aim_duration:
@@ -280,7 +287,7 @@ class MalmoAgent():
             self.last_angle = self.transform["yaw"]
                 
         #Track positions of all arrows in flight
-        self.track_arrows_step(move_agent,target_transform)
+        self.track_arrows_step(mover_obs,target_transform)
         return result
 
 
@@ -311,10 +318,6 @@ class MalmoAgent():
         if desiredYaw == None and desiredPitch == None:
             return
         
-        yaw_speed = 1
-        pitch_speed = 1      
-        dampening_factor = 0.4
-        
         #Get current yaw and pitch
         current_yaw = self.transform["yaw"]
         current_pitch = self.transform["pitch"]
@@ -328,7 +331,6 @@ class MalmoAgent():
 
         #If aiming at the right angle, return true
         allowable_deviation = 1.2 #degrees
-        aim_curve_exp = 2
         '''
         The curve from [0,1] is modified by exponentiating the value.
         This adjusts speeds when near 0 or near 1.
@@ -341,29 +343,20 @@ class MalmoAgent():
         else:
             #set aim direction
             yaw_multiplier = 1
-            if yaw_diff > 180:
+            while yaw_diff > 180:
                 yaw_diff = yaw_diff - 360
+            while(yaw_diff < -180):
+                yaw_diff = yaw_diff + 360
             yaw_multiplier = -1 if yaw_diff < 0 else 1
-
-            #set aim velocity
-            yaw_perc = clamp(0,1,abs(yaw_diff)/55)
-            yaw_perc = logistic(yaw_perc)
-            yaw_speed = clamped_lerp(0.0,.18,yaw_perc)
-            self.agent.sendCommand("turn " + str(yaw_multiplier * yaw_speed))
+            self.agent.sendCommand("turn " + str(yaw_multiplier * abs(yaw_diff) * self.turn_speed_multiplier))
 
         if abs(pitch_diff) < allowable_deviation:
             self.agent.sendCommand("pitch 0")
         else:
             #set aim direction
             pitch_multiplier = -1 if pitch_diff < 0 else 1
+            self.agent.sendCommand("pitch " + str( pitch_multiplier * abs(pitch_diff) * self.turn_speed_multiplier))
 
-            #set aim velocity
-            pitch_perc = clamp(0,1,abs(pitch_diff)/40)
-            pitch_perc = logistic(pitch_perc)
-            pitch_speed = clamped_lerp(0.0,.15,pitch_perc)
-
-            self.agent.sendCommand("pitch " + str( pitch_multiplier * pitch_speed))
-       
 
 
         
@@ -371,7 +364,7 @@ class MalmoAgent():
             #Aim is good when the aim has been on the target angle for two consecutive ticks.
             #This is to counteract times when aim is correct but current look velocity
             #is too high so it throws off the aim before the stop command is issued
-            if self.aim_on_target_ticks >= 4:
+            if self.aim_on_target_ticks >= 3:
                     return True   
             else:
                 self.aim_on_target_ticks += 1
@@ -384,9 +377,7 @@ class MalmoAgent():
         self.aim_on_target_ticks = 0
         return False
 
-    def track_arrows_step(self,move_agent, target_transform):
-        move_agent.set_obs(load_grid(move_agent.agent))
-        mover_obs = move_agent._obs
+    def track_arrows_step(self,mover_obs, target_transform):
         #Iterate through arrow trackers
         for tracker in self.arrow_trackers:
             tracker.step(target_transform, mover_obs)
