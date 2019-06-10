@@ -258,7 +258,7 @@ class MalmoAgent():
                     self.desired_yaw, self.desired_pitch = self.calculate_desired_aim(target_transform)
                     
                 self.aim_timer += 1
-                aiming_complete = self.aim_step(self.desired_yaw,self.desired_pitch)
+                aiming_complete = self.aim_step(self.desired_yaw, self.desired_pitch)
                 
             else:
                 self.aim_timer = 0
@@ -275,6 +275,7 @@ class MalmoAgent():
                 self.shoot_timer = 0
                 self.shoot_state = AIMING
                 self.listen_for_new_arrow = True
+                self.vert_angle_step = min(45, self.vert_angle_step + 3)
 
         #Find newly fired arrows
         if self.listen_for_new_arrow:
@@ -392,33 +393,19 @@ class MalmoAgent():
         vert_error = 0
         hori_error = 0
         if len(data) > 0:
-            for a in aim_data:
-                #data_preds = []
-                last_distance_from_player = 0
-                current_distance_from_player = 0
+            #data_preds = []
+            last_distance_from_player = 0
+            current_distance_from_player = 0
 
-                #Count the number of instances where distance to arrow decreases
-                reverse_ticks = 0
-                
-                for i in range(len(data)):
-                    if self.desired_pitch < 85 and (i == 0 or not np.array_equal(data[i][0], data[i-1][0])):
-                        d_elevation = data[i][0][1] - self.transform["y"]
-                        pred_location = data[i][0] - pred_velocity*(data[i][1]-a[1])
-                        #data_preds.append(pred_location)
-                        d_distance = magnitude(pred_location[::2] - np.asarray([self.transform["x"], self.transform["z"]]))
-                        #get arrow position distance from shooter.  Ignore y-difference
-                        current_distance_from_player = flat_distance(data[i][0]-player_loc)
-
-                        #Arrow hits if arrow's distance from player decreases.  Arrow's should strictly move away from the player's shooting position if they do not hit anyone
-                        if i > 1 and current_distance_from_player < last_distance_from_player:
-                            reverse_ticks += 1
-
-                        #Update previous position
-                        last_distance_from_player = current_distance_from_player
-                        d_angle = ((get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]) - a[0] + 180) % 360) - 180
-                        self.data_set.vert_shots[1].append([d_distance, d_elevation, self.desired_pitch])
-                        self.data_set.hori_shots[1].append([d_angle, d_distance, obs[0], self.transform["yaw"] - a[0]])
-        
+            #Count the number of instances where distance to arrow decreases
+            reverse_ticks = 0
+            
+            for i in range(len(data)):
+                if self.desired_pitch < 85 and (i == 0 or not np.array_equal(data[i][0], data[i-1][0])):
+                    d_elevation = data[i][0][1] - player_loc[1]
+                    pred_location = data[i][0] - pred_velocity*(data[i][1]-aim_data[0][1])
+                    #data_preds.append(pred_location)
+                    d_distance = magnitude(pred_location[::2] - np.asarray([self.transform["x"], self.transform["z"]]))
                     #get arrow position distance from shooter.  Ignore y-difference
                     current_distance_from_player = flat_distance(data[i][0]-player_loc)
 
@@ -428,6 +415,19 @@ class MalmoAgent():
 
                     #Update previous position
                     last_distance_from_player = current_distance_from_player
+                    d_angle = ((get_hori_angle(player_loc[0], player_loc[2], pred_location[0], pred_location[2]) - aim_data[0][0] + 180) % 360) - 180
+                    self.data_set.vert_shots[1].append([d_distance, d_elevation, -self.desired_pitch])
+                    self.data_set.hori_shots[1].append([d_angle, d_distance, obs[0], aim_data[-1][0] - aim_data[0][0]])
+    
+                #get arrow position distance from shooter.  Ignore y-difference
+                current_distance_from_player = flat_distance(data[i][0]-player_loc)
+
+                #Arrow hits if arrow's distance from player decreases.  Arrow's should strictly move away from the player's shooting position if they do not hit anyone
+                if i > 1 and current_distance_from_player < last_distance_from_player:
+                    reverse_ticks += 1
+
+                #Update previous position
+                last_distance_from_player = current_distance_from_player
 
             #Append errors depending on how close the arrow got
             closest_point, target_loc = get_closest_point(data, target_data)
@@ -438,7 +438,6 @@ class MalmoAgent():
 
             self.vert_errors.append(vert_error)
             self.hori_errors.append(hori_error)
-            self.commands.append((self.agent, "chat /kill @e[type=!player]", self.total_time + 0))
             #An arrow hits the target if it has moved backward for more than 2 ticks
             #(Arrows that hit nothing decrease in distance for 1-2 ticks)
             if reverse_ticks > 2:
@@ -497,12 +496,11 @@ class MalmoAgent():
                 array = array[array[:,-1] > 45]
             else:
                 array = array[array[:,-1] <= 45]
-        if self.vert_angle_step >= 45:
-            poly = PolynomialFeatures(2, include_bias=False).fit(array[:,:-1])
-            self.model = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,-1])
-            return min(self.model.predict(poly.transform([[distance, elevation]]))[0], 89.9)
+            if self.vert_angle_step >= 45:
+                poly = PolynomialFeatures(2, include_bias=False).fit(array[:,:-1])
+                self.model = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,-1])
+                return min(self.model.predict(poly.transform([[distance, elevation]]))[0], 89.9)
 
-        self.vert_angle_step += 3
         return self.vert_angle_step
 
 
