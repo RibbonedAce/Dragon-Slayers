@@ -202,7 +202,7 @@ class MalmoAgent():
         self.reset_shoot_loop()
 
     def reset_shoot_loop(self):
-        self.min_aim_duration = 35
+        self.min_aim_duration = 20
         self.max_record_duration = 50 #ticks
         self.shoot_state = AIMING
         self.aim_timer = 0
@@ -255,10 +255,10 @@ class MalmoAgent():
                     self.yaw_damp = 1
                     self.pitch_damp = 1
                     result = True
+                    self.desired_yaw, self.desired_pitch = self.calculate_desired_aim(target_transform)
                     
-                self.calculate_desired_aim(target_transform)
                 self.aim_timer += 1
-                aiming_complete = self.aim_step(((self.transform["yaw"] + self.desired_yaw + 180) % 360) - 180, -self.desired_pitch)
+                aiming_complete = self.aim_step(self.desired_yaw,self.desired_pitch)
                 
             else:
                 self.aim_timer = 0
@@ -301,13 +301,13 @@ class MalmoAgent():
         x_velocity = project_vector(np.asarray([target_transform["motionX"], target_transform["motionY"], target_transform["motionZ"]]), vector_from_angle(x_angle))
         x_velocity = math.copysign(magnitude(x_velocity), math.cos(math.radians(get_angle_between(vector_from_angle(x_angle), x_velocity))))
         #set desired pitch
-        self.desired_pitch = self.get_first_vert_shot(distance, elevation+1)
+        delta_pitch = self.get_first_vert_shot(distance, elevation+1)
         #set desired yaw
-        self.desired_yaw = self.get_first_hori_shot(rel_angle, distance, x_velocity)
+        delta_yaw = self.get_first_hori_shot(rel_angle, distance, x_velocity)
 
         #Store some data points now to use for future data points
         self.current_data = [x_velocity, self.transform["yaw"]]
-
+        return (((self.transform["yaw"] + delta_yaw + 180) % 360) - 180,-delta_pitch)
 
     def aim_step(self, desiredYaw, desiredPitch):
         '''
