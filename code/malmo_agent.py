@@ -242,7 +242,7 @@ class MalmoAgent():
         
         result = False
         self.step(shooter_obs)
-        self.aim_data.append((self.transform["yaw"], time.time()))
+        self.aim_data.append((self.transform["yaw"], -self.transform["pitch"], time.time()))
         mover_obs = move_agent._obs
 
         #aims over max_aim_duration many ticks
@@ -301,13 +301,15 @@ class MalmoAgent():
         x_angle = ((obs_angle + 180 + 90) % 360) - 180
         x_velocity = project_vector(np.asarray([target_transform["motionX"], target_transform["motionY"], target_transform["motionZ"]]), vector_from_angle(x_angle))
         x_velocity = math.copysign(magnitude(x_velocity), math.cos(math.radians(get_angle_between(vector_from_angle(x_angle), x_velocity))))
+        z_velocity = project_vector(np.asarray([target_transform["motionX"], target_transform["motionY"], target_transform["motionZ"]]), vector_from_angle(obs_angle))
+        z_velocity = math.copysign(magnitude(z_velocity), math.cos(math.radians(get_angle_between(vector_from_angle(obs_angle), z_velocity))))
         #set desired pitch
         delta_pitch = self.get_first_vert_shot(distance, elevation+1)
         #set desired yaw
-        delta_yaw = self.get_first_hori_shot(rel_angle, distance, x_velocity)
+        delta_yaw = self.get_first_hori_shot(rel_angle, distance, x_velocity, z_velocity)
 
         #Store some data points now to use for future data points
-        self.current_data = [x_velocity, self.transform["yaw"]]
+        self.current_data = [x_velocity, z_velocity, self.transform["yaw"]]
         return (((self.transform["yaw"] + delta_yaw + 180) % 360) - 180,-delta_pitch)
 
     def aim_step(self, desiredYaw, desiredPitch):
@@ -330,7 +332,7 @@ class MalmoAgent():
             pitch_diff = desiredPitch - current_pitch
 
         #If aiming at the right angle, return true
-        allowable_deviation = 1.2 #degrees
+        allowable_deviation = 0.5 #degrees
         '''
         The curve from [0,1] is modified by exponentiating the value.
         This adjusts speeds when near 0 or near 1.
@@ -388,7 +390,7 @@ class MalmoAgent():
 
     def analyze_arrow_trajectory(self, target_transform, data, target_data, obs, aim_data):        
         player_loc = np.asarray([self.transform["x"], self.transform["y"], self.transform["z"]])
-        pred_velocity = obs[0] * vector_from_angle(((obs[1] + 180 + 90) % 360) - 180)
+        pred_velocity = obs[0] * vector_from_angle(((obs[2] + 180 + 90) % 360) - 180) + obs[1] * vector_from_angle(obs[2])
         
         vert_error = 0
         hori_error = 0
@@ -403,7 +405,7 @@ class MalmoAgent():
             for i in range(len(data)):
                 if self.desired_pitch < 85 and (i == 0 or not np.array_equal(data[i][0], data[i-1][0])):
                     d_elevation = data[i][0][1] - player_loc[1]
-                    pred_location = data[i][0] - pred_velocity*(data[i][1]-aim_data[0][1])
+                    pred_location = data[i][0] - pred_velocity*(data[i][1]-aim_data[0][2])
                     #data_preds.append(pred_location)
                     d_distance = magnitude(pred_location[::2] - np.asarray([self.transform["x"], self.transform["z"]]))
                     #get arrow position distance from shooter.  Ignore y-difference
@@ -416,8 +418,8 @@ class MalmoAgent():
                     #Update previous position
                     last_distance_from_player = current_distance_from_player
                     d_angle = ((get_hori_angle(player_loc[0], player_loc[2], pred_location[0], pred_location[2]) - aim_data[0][0] + 180) % 360) - 180
-                    self.data_set.vert_shots[1].append([d_distance, d_elevation, -self.desired_pitch])
-                    self.data_set.hori_shots[1].append([d_angle, d_distance, obs[0], aim_data[-1][0] - aim_data[0][0]])
+                    self.data_set.vert_shots[1].append([d_distance, d_elevation, aim_data[-1][1]])
+                    self.data_set.hori_shots[1].append([d_angle, d_distance, obs[0], obs[1], aim_data[-1][0] - aim_data[0][0]])
     
                 #get arrow position distance from shooter.  Ignore y-difference
                 current_distance_from_player = flat_distance(data[i][0]-player_loc)
@@ -497,7 +499,7 @@ class MalmoAgent():
             else:
                 array = array[array[:,-1] <= 45]
             if self.vert_angle_step >= 45:
-                poly = PolynomialFeatures(2, include_bias=False).fit(array[:,:-1])
+                poly = PolynomialFeatures(3, include_bias=False).fit(array[:,:-1])
                 self.model = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,-1])
                 return min(self.model.predict(poly.transform([[distance, elevation]]))[0], 89.9)
 
@@ -512,12 +514,12 @@ class MalmoAgent():
             bound_angle = 0
         return prev_angle*(1-step_size) + bound_angle*step_size
 
-    def get_first_hori_shot(self, angle, distance, x_velocity):
+    def get_first_hori_shot(self, angle, distance, x_velocity, z_velocity):
         array = np.asarray(self.data_set.hori_shots[0] + self.data_set.hori_shots[1])
         if array.shape[0] > 100:
             poly = PolynomialFeatures(2, include_bias=False).fit(array[:,:-1])
             self.model = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,-1])
-            return min(max(-180, self.model.predict(poly.transform([[angle, distance, x_velocity]]))[0]), 180)
+            return min(max(-180, self.model.predict(poly.transform([[angle, distance, x_velocity, z_velocity]]))[0]), 180)
         
         return random.randrange(-180, 180)
 
@@ -601,6 +603,7 @@ class MalmoAgent():
         obs_angle = ((get_hori_angle(self.transform["x"], self.transform["z"], target_transform["x"], target_transform["z"]) - self.transform["yaw"] + 180) % 360) - 180
         x_angle = ((obs_angle + 180 + 90) % 360) - 180
         x_velocity = project_vector(np.asarray([target_transform["motionX"], target_transform["motionY"], target_transform["motionZ"]]), vector_from_angle(x_angle))[0] / vector_from_angle(x_angle)[0]
+        z_velocity = project_vector(np.asarray([target_transform["motionX"], target_transform["motionY"], target_transform["motionZ"]]), vector_from_angle(obs_angle))[0] / vector_from_angle(obs_angle)[0]
         self.agent.sendCommand("use 1")
         
         #if self.total_time < 30 or len(self.vert_shots[0] + self.vert_shots[1]) > 5:
@@ -610,7 +613,7 @@ class MalmoAgent():
             #self.vert_step_size *= 0.8
             
         #if self.total_time < 30 or len(self.hori_shots[0] + self.hori_shots[1]) > 5:
-        self.desired_yaw = self.get_first_hori_shot(obs_angle, distance, x_velocity)
+        self.desired_yaw = self.get_first_hori_shot(obs_angle, distance, x_velocity, z_velocity)
         #else:
             #self.desired_yaw = self.get_next_hori_shot(self.desired_yaw, self.hori_errors[-1], self.hori_step_size)
             #self.vert_step_size *= 0.8
