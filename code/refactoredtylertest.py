@@ -15,6 +15,7 @@ from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from Missions.staticflyingtarget import StaticFlyingTargetMission
 from Missions.xstrafingtargetmission import XStrafingTargetMission
+from Missions.simplifiedxstrafingmission import SimplifiedXStrafingMission
 from malmo_agent import MalmoAgent
 from graphing import Graphing
 from fileio import FileIO
@@ -63,7 +64,7 @@ malmo.minecraftbootstrap.launch_minecraft([10001, 10002])
 
 # Create default Malmo objects:
 graphing = False
-my_mission = XStrafingTargetMission()
+my_mission = SimplifiedXStrafingMission()
 agents = my_mission.two_agent_init()
 iterations = 20
 vert_step_size = 0.5
