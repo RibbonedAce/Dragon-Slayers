@@ -36,7 +36,7 @@ class SimplifiedXStrafingMission(Mission):
               </ServerInitialConditions>
                 <ServerHandlers>
                   <FlatWorldGenerator></FlatWorldGenerator>
-                  <ServerQuitFromTimeUp timeLimitMs="4000"/>
+                  <ServerQuitFromTimeUp timeLimitMs="8000"/>
                 </ServerHandlers>
               </ServerSection>
 
