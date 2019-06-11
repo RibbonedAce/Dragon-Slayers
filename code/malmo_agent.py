@@ -258,6 +258,7 @@ class MalmoAgent():
         
         result = False
         self.step(shooter_obs)
+        #Abort if no target to aim at/record data for
         if target_transform is None:
             return None
         self.aim_data.append((self.transform["yaw"], -self.transform["pitch"], time.time()))
@@ -513,12 +514,6 @@ class MalmoAgent():
                 self.transform["motionY"] = (self.transform["y"] - self.transform["prevY"][-1]) / (self.transform["time"] - self.transform["prevTime"][-1])
                 self.transform["motionZ"] = (self.transform["z"] - self.transform["prevZ"][-1]) / (self.transform["time"] - self.transform["prevTime"][-1])
                     
-            
-    def fill_inventory(self):
-        result = ""
-        for i in range(36):
-            result += "<InventoryItem slot=\"" + str(i) + "\" type=\"bow\" quantity=\"1\"/>\n"
-        return result
 
     def get_first_vert_shot(self, distance, elevation):
         array = np.asarray(self.data_set.vert_shots[0] + self.data_set.vert_shots[1])
@@ -556,182 +551,10 @@ class MalmoAgent():
         result = prev_angle - error
         return ((result + 180) % 360) - 180
 
-    def set_yaw_and_pitch(self, desiredYaw=None, desiredPitch=None, timeLimit=2):
-        if desiredYaw == None and desiredPitch == None:
-            return
-        
-        i = 1
-        total_sleep = 0
-        
-        while True:
-            self.set_obs(load_grid(self.agent))
-
-            current_yaw = self.transform["yaw"]
-            current_pitch = self.transform["pitch"]
-            
-            yaw_diff = 0
-            if desiredYaw != None:
-                yaw_diff = desiredYaw - current_yaw
-            pitch_diff = 0
-            if desiredPitch != None:
-                pitch_diff = desiredPitch - current_pitch
-
-            if (abs(yaw_diff) < 0.001 and abs(pitch_diff) < 0.001):
-                break
-                
-            yaw_multiplier = 1
-            pitch_multiplier = 1
-            if yaw_diff > 180:
-                yaw_diff = yaw_diff - 360
-            if yaw_diff < 0:
-                yaw_multiplier = -1
-            if pitch_diff < 0:
-                pitch_multiplier = -1
-                
-            yaw_sleep = abs(yaw_diff) / (i * 900)
-            pitch_sleep = abs(pitch_diff) / (i * 900)
-            sleep_time = max(yaw_sleep, pitch_sleep, 0.001)
-            actual_sleep = min(timeLimit - total_sleep, sleep_time)
-            total_sleep += actual_sleep
-
-            self.agent.sendCommand("turn " + str(i * yaw_multiplier * yaw_sleep / sleep_time))
-            self.agent.sendCommand("pitch " + str(i * pitch_multiplier * pitch_sleep / sleep_time))
-            time.sleep(actual_sleep)
-            self.agent.sendCommand("turn 0")
-            self.agent.sendCommand("pitch 0")            
-            if total_sleep >= timeLimit:
-                break
-                
-            i *= 0.5
-            
-        if (total_sleep < timeLimit):
-            time.sleep(timeLimit - total_sleep)
-        return timeLimit
-    
 
     def process_commands(self, mission_elapsed_time):
         for command in self.commands:
             if command[2] <= mission_elapsed_time:
                 self.commands.remove(command)
                 command[0].sendCommand(command[1])
-
-
-    def shoot_at_target(self, target):
-        '''
-        Aims and shoots at target point
-
-        '''
-
-        if not self._obs:
-            return
-        
-        target.set_obs(load_grid(target.agent))
-        target_transform = target.transform
-        distance = vert_distance(target_transform["x"], target_transform["z"], self.transform["x"], self.transform["z"])
-        elevation = target_transform["y"] - self.transform["y"]
-        obs_angle = ((get_hori_angle(self.transform["x"], self.transform["z"], target_transform["x"], target_transform["z"]) - self.transform["yaw"] + 180) % 360) - 180
-        x_angle = ((obs_angle + 180 + 90) % 360) - 180
-        x_velocity = project_vector(np.asarray([target_transform["motionX"], target_transform["motionY"], target_transform["motionZ"]]), vector_from_angle(x_angle))[0] / vector_from_angle(x_angle)[0]
-        z_velocity = project_vector(np.asarray([target_transform["motionX"], target_transform["motionY"], target_transform["motionZ"]]), vector_from_angle(obs_angle))[0] / vector_from_angle(obs_angle)[0]
-        self.agent.sendCommand("use 1")
-        
-        #if self.total_time < 30 or len(self.vert_shots[0] + self.vert_shots[1]) > 5:
-        self.desired_pitch = self.get_first_vert_shot(distance, elevation+1)
-        #else:
-            #self.desired_pitch = self.get_next_vert_shot(self.desired_pitch, self.vert_errors[-1], self.vert_step_size)
-            #self.vert_step_size *= 0.8
-            
-        #if self.total_time < 30 or len(self.hori_shots[0] + self.hori_shots[1]) > 5:
-        self.desired_yaw = self.get_first_hori_shot(obs_angle, distance, x_velocity, z_velocity)
-        #else:
-            #self.desired_yaw = self.get_next_hori_shot(self.desired_yaw, self.hori_errors[-1], self.hori_step_size)
-            #self.vert_step_size *= 0.8
-
-        self.last_shot = time.time()
-        last_yaw = self.transform["yaw"]
-        self.set_yaw_and_pitch(((self.transform["yaw"] + self.desired_yaw + 180) % 360) - 180, -self.desired_pitch)
-        self.agent.sendCommand("use 0")
-
-        return [x_velocity, last_yaw]
-
-    def record_data(self, target_transform, obs, other=None):
-        if not other:
-            other = self
-        
-        ticks_to_wait = 50
-        keeper = TimeKeeper()
-        
-        data = []
-        target_data = []
-        
-        player_loc = np.asarray([self.transform["x"], self.transform["y"], self.transform["z"]])
-        while ticks_to_wait > 0:
-            other.set_obs(load_grid(other.agent))
-            if not other._obs:
-                return
-            arrow = find_mob_by_name(other._obs["Mobs"], "Arrow")
-            target = find_mob_by_name(other._obs["Mobs"], "Mover")
-            
-            target_data.append((np.asarray([target["x"], target["y"], target["z"]]), other._obs["time"]))
-            #if arrow found
-            if arrow:
-                #get arrow location
-                arrow_data = np.asarray([arrow["x"], arrow["y"], arrow["z"]])
-                #if first arrow data or different from previous arrow data
-                #avoid appending duplicate adjacent data
-                if len(data) == 0 or not np.array_equal(arrow_data,data[-1][0]):
-                    data.append((arrow_data, other._obs["time"]))
-            
-            ticks_to_wait -= 1
-            keeper.advance_by(0.05)
-
-        #Begin charging new arrow
-        self.agent.sendCommand("use 1")
-        
-        vert_error = 0
-        hori_error = 0
-        if len(data) > 0 and target_data[-1][1] > target_data[0][1]:
-            
-            abs_velocity = (target_data[-1][0] - target_data[0][0]) / (target_data[-1][1] - target_data[0][1])
-            target_velocity = project_vector(abs_velocity, vector_from_angle(self.transform["yaw"]))
-            closest_point = get_closest_point(data, target_loc)
-            last_distance_from_player = 0
-            current_distance_from_player = 0
-
-            #Count the number of instances where distance to arrow decreases
-            reverse_ticks = 0
-            
-            for i in range(len(data)):
-                if i == 0 or not np.array_equal(data[i][0], data[i-1][0]):
-                    d_distance = magnitude(data[i][0][::2] - np.asarray([self.transform["x"], self.transform["z"]]))
-                    d_elevation = data[i][0][1] - self.transform["y"]
-                    pred_location = data[i][0] - abs_velocity*(data[i][1]-self.last_shot)
-                    #get arrow position distance from shooter.  Ignore y-difference
-                    current_distance_from_player = flat_distance(data[i][0]-player_loc)
-
-                    #Arrow hits if arrow's distance from player decreases.  Arrow's should strictly move away from the player's shooting position if they do not hit anyone
-                    if i > 1 and current_distance_from_player < last_distance_from_player:
-                        reverse_ticks += 1
-
-                    #Update previous position
-                    last_distance_from_player = current_distance_from_player
-                    d_angle = ((get_hori_angle(self.transform["x"], self.transform["z"], pred_location[0], pred_location[2]) - obs[1] + 180) % 360) - 180
-                    self.data_set.vert_shots[1].append([d_distance, d_elevation, self.desired_pitch])
-                    self.data_set.hori_shots[1].append([d_angle, d_distance, obs[0], self.desired_yaw])
-            closest_point, target_loc = get_closest_point(data, target_data)
-            vert_error = closest_point[1] - target_loc[1]
-            hori_error = get_hori_angle(self.transform["x"], self.transform["z"], closest_point[0], closest_point[2]) - \
-                        get_hori_angle(self.transform["x"], self.transform["z"], target_loc[0], target_loc[2])
-            hori_error = ((hori_error + 180) % 360) - 180
-
-            self.vert_errors.append(vert_error)
-            self.hori_errors.append(hori_error)
-            self.commands.append((self.agent, "chat /kill @e[type=!player]", self.total_time + 0))
-
-            #An arrow hits the target if it has moved backward for more than 2 ticks
-            #(Arrows that hit nothing decrease in distance for 1-2 ticks)
-            if reverse_ticks > 2:
-                self.end_mission = True
-
-        return -((vert_error**2 + hori_error**2)**0.5)
 

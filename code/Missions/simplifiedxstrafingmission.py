@@ -86,5 +86,5 @@ class SimplifiedXStrafingMission(Mission):
         move_agent.commands.append((move_agent.agent, "strafe 0.5", 0))
 
 
-    def ai_step(self, move_agent):
+    def ai_step(self, move_agent, target_transform):
         pass

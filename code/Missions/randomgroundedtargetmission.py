@@ -20,7 +20,7 @@ class RandomGroundedTargetMission(Mission):
 
 
 
-    def ai_step(self, move_agent):
+    def ai_toggle(self, move_agent, target_transform):
         move_agent.agent.sendCommand("move 0")
         self.set_random_direction(move_agent)
         move_agent.agent.sendCommand("move 1")

@@ -227,6 +227,8 @@ class Mission():
 
     def ai_step(self, move_agent, target_transform):
         pass
+    def ai_toggle(self, move_agent, target_transform):
+        pass
 
     def get_target(self, entities):
         for entity in entities:
