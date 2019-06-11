@@ -227,9 +227,7 @@ class MalmoAgent():
         self.shoot_timer = 0
         self.aim_on_target_ticks = 0
         self.end_mission = False
-        
-        self.yaw_damp = 1
-        self.pitch_damp = 1
+      
         self.listen_for_new_arrow = False
         self.arrow_ids = set()
         self.arrow_trackers = []
@@ -260,6 +258,8 @@ class MalmoAgent():
         
         result = False
         self.step(shooter_obs)
+        if target_transform is None:
+            return None
         self.aim_data.append((self.transform["yaw"], -self.transform["pitch"], time.time()))
         mover_obs = move_agent._obs
 
@@ -270,8 +270,6 @@ class MalmoAgent():
                     #Calculate desired aim once at start of aiming loop
                     #aim_iteration is used to calculate rotation speed
                     self.agent.sendCommand("use 1")
-                    self.yaw_damp = 1
-                    self.pitch_damp = 1
                     result = True
                     self.desired_yaw, self.desired_pitch = self.calculate_desired_aim(target_transform)
                     
@@ -350,14 +348,12 @@ class MalmoAgent():
             pitch_diff = desiredPitch - current_pitch
 
         #If aiming at the right angle, return true
-        allowable_deviation = 0.5 #degrees
+        allowable_deviation = 0.2 #degrees
         '''
         The curve from [0,1] is modified by exponentiating the value.
         This adjusts speeds when near 0 or near 1.
         '''
-        #self.yaw_damp *= dampening_factor 
-        #self.pitch_damp *= dampening_factor 
-        
+      
         if abs(yaw_diff) < allowable_deviation:
             self.agent.sendCommand("turn 0")
         else:
@@ -462,7 +458,8 @@ class MalmoAgent():
             #An arrow hits the target if it has moved backward for more than 2 ticks
             #(Arrows that hit nothing decrease in distance for 1-2 ticks)
             if reverse_ticks > 2:
-                self.end_mission = True
+                pass
+                #self.end_mission = True
 
         return -((vert_error**2 + hori_error**2)**0.5)
     
@@ -476,7 +473,7 @@ class MalmoAgent():
     def set_obs(self, obs):
         if not obs:
             return
-            
+        has_prev = True if self._obs else False
         self._obs = obs
         for entity in self._obs["Mobs"]:
             if entity["name"] == self.name:

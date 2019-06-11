@@ -225,8 +225,14 @@ class Mission():
         print("Mission running.")
 
 
-    def ai_step(self, move_agent):
+    def ai_step(self, move_agent, target_transform):
         pass
+
+    def get_target(self, entities):
+        for entity in entities:
+          if entity["name"] == "Mover":
+              return entity
+        return None
 
 
 
