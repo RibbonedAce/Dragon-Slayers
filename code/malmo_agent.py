@@ -287,6 +287,7 @@ class MalmoAgent():
         if self.shoot_state == SHOOT:
             self.agent.sendCommand("use 0")
             self.stored_data = self.current_data
+            self.stored_data[2] = self.transform["yaw"]
             if self.shoot_timer < 2:
                 self.shoot_timer += 1
             else:
@@ -408,7 +409,6 @@ class MalmoAgent():
 
     def analyze_arrow_trajectory(self, target_transform, data, target_data, obs, aim_data):        
         player_loc = np.asarray([self.transform["x"], self.transform["y"], self.transform["z"]])
-        print(obs[1])
         pred_velocity = obs[0] * vector_from_angle(((obs[2] + 180 + 90) % 360) - 180) + obs[1] * vector_from_angle(obs[2])
         
         vert_error = 0
@@ -438,7 +438,7 @@ class MalmoAgent():
                     last_distance_from_player = current_distance_from_player
                     d_angle = ((get_hori_angle(player_loc[0], player_loc[2], pred_location[0], pred_location[2]) - aim_data[0][0] + 180) % 360) - 180
                     self.data_set.vert_shots[1].append([d_distance, d_elevation, aim_data[-1][1]])
-                    self.data_set.hori_shots[1].append([d_angle, d_distance, obs[0], obs[1], aim_data[-1][0] - aim_data[0][0]])
+                    self.data_set.hori_shots[1].append([d_angle, d_distance, obs[0], obs[1], obs[2] - aim_data[0][0]])
     
                 #get arrow position distance from shooter.  Ignore y-difference
                 current_distance_from_player = flat_distance(data[i][0]-player_loc)
@@ -451,6 +451,7 @@ class MalmoAgent():
                 last_distance_from_player = current_distance_from_player
 
             #Append errors depending on how close the arrow got
+            print(self.data_set.hori_shots[1][-1])
             closest_point, target_loc = get_closest_point(data, target_data)
             vert_error = closest_point[1] - target_loc[1]
             hori_error = get_hori_angle(self.transform["x"], self.transform["z"], closest_point[0], closest_point[2]) - \
@@ -478,6 +479,7 @@ class MalmoAgent():
             return
             
         self._obs = obs
+        has_prev = self.transform is not None
         for entity in self._obs["Mobs"]:
             if entity["name"] == self.name:
                 if has_prev:
@@ -497,6 +499,7 @@ class MalmoAgent():
                     
                 else:
                     # Create past data if none exists
+                    self.transform = {}
                     self.transform["prevX"] = []
                     self.transform["prevY"] = []
                     self.transform["prevZ"] = []
@@ -512,9 +515,10 @@ class MalmoAgent():
                 self.transform["time"] = self._obs["time"]
 
                 # Calculate velocity
-                self.transform["motionX"] = (self.transform["x"] - self.transform["prevX"][-1]) / (self.transform["time"] - self.transform["prevTime"][-1])
-                self.transform["motionY"] = (self.transform["y"] - self.transform["prevY"][-1]) / (self.transform["time"] - self.transform["prevTime"][-1])
-                self.transform["motionZ"] = (self.transform["z"] - self.transform["prevZ"][-1]) / (self.transform["time"] - self.transform["prevTime"][-1])
+                if has_prev:
+                    self.transform["motionX"] = (self.transform["x"] - self.transform["prevX"][0]) / (self.transform["time"] - self.transform["prevTime"][0])
+                    self.transform["motionY"] = (self.transform["y"] - self.transform["prevY"][0]) / (self.transform["time"] - self.transform["prevTime"][0])
+                    self.transform["motionZ"] = (self.transform["z"] - self.transform["prevZ"][0]) / (self.transform["time"] - self.transform["prevTime"][0])
                     
             
     def fill_inventory(self):

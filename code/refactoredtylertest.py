@@ -83,6 +83,7 @@ try:
         mission = MalmoPython.MissionSpec(my_mission.get_mission_xml(params), True)
         my_mission.load_duo_mission(mission, agents)
         shoot_agent.reset()
+        shoot_agent.reset_shoot_loop()
         move_agent.reset()
         
         # Loop until mission ends:
@@ -110,7 +111,6 @@ try:
             
             #If shoot agent hits target, end mission early
             if shoot_agent.end_mission:
-                shoot_agent.reset_shoot_loop()
                 print("Ending mission early...")
                 break
             keeper.advance_by(0.05)
