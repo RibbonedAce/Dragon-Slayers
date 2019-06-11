@@ -22,4 +22,4 @@ Reports:
 - [Learning to Shoot in First Person Shooter Games by Stabilizing Actions and Clustering Rewards for Reinforcement Learning](https://arxiv.org/pdf/1806.05117.pdf)
 - [Human-level control through deep reinforcementlearning](https://www.readcube.com/articles/10.1038/nature14236)
 
-\*resources used before switching to linear regression
+<sub><sup>\*resources used before switching to linear regression</sup></sub>
