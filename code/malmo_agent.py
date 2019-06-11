@@ -102,6 +102,24 @@ def project_vector(vector1, vector2):
     magsq = np.sum(vector2**2)
     return prod/magsq * vector2
 
+def signed_quadratic_features(data, features, include_bias=False):
+    result = np.zeros(data.shape)
+    for i in range(len(data)):
+        to_add = np.zeros(data.shape[1])
+        square_indices = [int(j*features - j*(j-1)/2) for j in range(features)]
+        to_add[:features] = data[i,:features]
+        for j in range(features, data.shape[1]):
+            if j-features in square_indices:
+                ft = square_indices.index(j-features)
+                if data[i,ft] < 0:
+                    to_add[j] = -data[i,j]
+                else:
+                    to_add[j] = data[i,j]
+            else:
+                to_add[j] = data[i,j]
+        result[i,:] = to_add
+    return result
+
 def get_closest_point(curve, target):
     '''
     Get closest points based on two lists of locations at times.
@@ -390,6 +408,7 @@ class MalmoAgent():
 
     def analyze_arrow_trajectory(self, target_transform, data, target_data, obs, aim_data):        
         player_loc = np.asarray([self.transform["x"], self.transform["y"], self.transform["z"]])
+        print(obs[1])
         pred_velocity = obs[0] * vector_from_angle(((obs[2] + 180 + 90) % 360) - 180) + obs[1] * vector_from_angle(obs[2])
         
         vert_error = 0
@@ -457,32 +476,45 @@ class MalmoAgent():
     def set_obs(self, obs):
         if not obs:
             return
-        
-        has_prev = True if self._obs else False
-        prev_time = 0
-        prev_pos = None
-        prev_velocity = None
-        if has_prev:
-            prev_time = self._obs["time"]
-            prev_pos = np.asarray([self.transform["x"], self.transform["y"], self.transform["z"]])
-            prev_velocity = np.asarray([self.transform["motionX"], self.transform["motionY"], self.transform["motionZ"]])
             
         self._obs = obs
         for entity in self._obs["Mobs"]:
             if entity["name"] == self.name:
-                self.transform = entity
-                
                 if has_prev:
-                    if prev_time != self._obs["time"]:
-                        new_pos = np.asarray([self.transform["x"], self.transform["y"], self.transform["z"]])
-                        velocity = (new_pos - prev_pos) / (self._obs["time"] - prev_time)
-                        self.transform["motionX"] = velocity[0]
-                        self.transform["motionY"] = velocity[1]
-                        self.transform["motionZ"] = velocity[2]
-                    else:
-                        self.transform["motionX"] = prev_velocity[0]
-                        self.transform["motionY"] = prev_velocity[1]
-                        self.transform["motionZ"] = prev_velocity[2]
+                    # Append past data
+                    self.transform["prevX"].append(self.transform["x"])
+                    if len(self.transform["prevX"]) > 4:
+                        self.transform["prevX"].pop(0)
+                    self.transform["prevY"].append(self.transform["y"])
+                    if len(self.transform["prevY"]) > 4:
+                        self.transform["prevY"].pop(0)
+                    self.transform["prevZ"].append(self.transform["z"])
+                    if len(self.transform["prevZ"]) > 4:
+                        self.transform["prevZ"].pop(0)
+                    self.transform["prevTime"].append(self.transform["time"])
+                    if len(self.transform["prevTime"]) > 4:
+                        self.transform["prevTime"].pop(0)
+                    
+                else:
+                    # Create past data if none exists
+                    self.transform["prevX"] = []
+                    self.transform["prevY"] = []
+                    self.transform["prevZ"] = []
+                    self.transform["prevTime"] = []
+
+                # Apply stats not found in normal transforms
+                old_transform = self.transform
+                self.transform = entity
+                self.transform["prevX"] = old_transform["prevX"]
+                self.transform["prevY"] = old_transform["prevY"]
+                self.transform["prevZ"] = old_transform["prevZ"]
+                self.transform["prevTime"] = old_transform["prevTime"]
+                self.transform["time"] = self._obs["time"]
+
+                # Calculate velocity
+                self.transform["motionX"] = (self.transform["x"] - self.transform["prevX"][-1]) / (self.transform["time"] - self.transform["prevTime"][-1])
+                self.transform["motionY"] = (self.transform["y"] - self.transform["prevY"][-1]) / (self.transform["time"] - self.transform["prevTime"][-1])
+                self.transform["motionZ"] = (self.transform["z"] - self.transform["prevZ"][-1]) / (self.transform["time"] - self.transform["prevTime"][-1])
                     
             
     def fill_inventory(self):
@@ -518,8 +550,8 @@ class MalmoAgent():
         array = np.asarray(self.data_set.hori_shots[0] + self.data_set.hori_shots[1])
         if array.shape[0] > 100:
             poly = PolynomialFeatures(2, include_bias=False).fit(array[:,:-1])
-            self.model = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,-1])
-            return min(max(-180, self.model.predict(poly.transform([[angle, distance, x_velocity, z_velocity]]))[0]), 180)
+            self.model = LinearRegression().fit(signed_quadratic_features(poly.transform(array[:,:-1]), 4), array[:,-1])
+            return min(max(-180, self.model.predict(signed_quadratic_features(poly.transform([[angle, distance, x_velocity, z_velocity]]), 4))[0]), 180)
         
         return random.randrange(-180, 180)
 

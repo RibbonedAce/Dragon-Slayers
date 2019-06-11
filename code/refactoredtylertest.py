@@ -64,7 +64,7 @@ malmo.minecraftbootstrap.launch_minecraft([10001, 10002])
 
 # Create default Malmo objects:
 graphing = False
-my_mission = StaticFlyingTargetMission()
+my_mission = SimplifiedXStrafingMission()
 agents = my_mission.two_agent_init()
 iterations = 20
 vert_step_size = 0.5
