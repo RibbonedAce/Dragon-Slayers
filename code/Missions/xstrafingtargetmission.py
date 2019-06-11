@@ -18,7 +18,7 @@ class XStrafingTargetMission(Mission):
         move_agent.commands.append((move_agent.agent, "strafe " + str(self.direction*self.speed), 0))
 
 
-    def ai_step(self, move_agent):
+    def ai_step(self, move_agent, target_transform):
         self.toggle_direction(move_agent)
 
     def toggle_direction(self, move_agent):

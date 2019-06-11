@@ -21,9 +21,7 @@ class ZStrafingTargetMission(Mission):
 
 
 
-    def ai_step(self, move_agent):
-        self.toggle_direction(move_agent)
-
-    def toggle_direction(self, move_agent):
+   
+    def ai_toggle(self, move_agent):
         self.direction *= -1
         move_agent.agent.sendCommand("move " + self.direction*self.speed)

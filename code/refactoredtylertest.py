@@ -16,6 +16,7 @@ from sklearn.preprocessing import PolynomialFeatures
 from Missions.staticflyingtarget import StaticFlyingTargetMission
 from Missions.xstrafingtargetmission import XStrafingTargetMission
 from Missions.simplifiedxstrafingmission import SimplifiedXStrafingMission
+from Missions.enemymission import EnemyMission
 from malmo_agent import MalmoAgent
 from graphing import Graphing
 from fileio import FileIO
@@ -53,11 +54,26 @@ def find_mob_by_name(mobs, name, new=False):
         if m["name"] == name:
             return m
     return None
+def find_entity_by_id(entities, id):
+    if id is None:
+        return None
+    for entity in entities:
+        if entity["id"] == id:
+            return entity
 
 def sleep_until(desired_time):
     current_time = time.time()
     if current_time <= desired_time:
         time.sleep(desired_time - current_time)
+
+def get_target(obs, target_id):
+    #Get existing target
+    target_transform = find_entity_by_id(obs["Mobs"],target_id)
+    if target_id is None or target_transform is None:
+        #Acquire new target
+        target_transform = my_mission.get_target(obs["Mobs"])
+        target_id = target_transform["id"] if (target_transform is not None) else None
+    return target_transform, target_id
 
 # Launch the clients
 malmo.minecraftbootstrap.launch_minecraft([10001, 10002])
@@ -79,7 +95,7 @@ move_agent = MalmoAgent("Mover",agents[1],0,0,vert_step_size,hori_step_size,None
 try:
     for i in range(iterations):
         time.sleep(1)
-        params = (random.randint(10, 50)*random.randrange(-1, 2, 2), random.randint(10, 50)*random.randrange(-1, 2, 2), random.randint(10, 30))
+        params = (random.randint(10, 30)*random.randrange(-1, 2, 2), random.randint(10, 30)*random.randrange(-1, 2, 2), random.randint(10, 30))
         mission = MalmoPython.MissionSpec(my_mission.get_mission_xml(params), True)
         my_mission.load_duo_mission(mission, agents)
         shoot_agent.reset()
@@ -95,6 +111,10 @@ try:
         shoot_agent.agent.sendCommand("use 1")
         
         world_state = shoot_agent.agent.peekWorldState()
+        shoot_agent.reset_shoot_loop()
+        target = None
+        target_id = None
+        first_target_found = False
         while world_state.is_mission_running:
             shooter_obs = load_grid(shoot_agent.agent)
             mover_obs = load_grid(move_agent.agent)
@@ -102,12 +122,22 @@ try:
                 break
             move_agent.step(mover_obs)
            
-            
+            #get target
+            target_transform, target_id = get_target(mover_obs, target_id)
+            if target_transform is not None:
+                first_target_found = True  
+            if target_transform is None and first_target_found:
+                #End mission early if no enemies remaining
+                break
+
+            #Run shooter ticks if target exists
             #agent step
-            if shoot_agent.shooter_step(shooter_obs, move_agent, move_agent.transform):
+            if shoot_agent.shooter_step(shooter_obs, move_agent, target_transform):
                 #Change mover direction
-                my_mission.ai_step(move_agent)
+                my_mission.ai_toggle(move_agent, target_transform)
             
+            my_mission.ai_step(move_agent, target_transform)
+        
             
             #If shoot agent hits target, end mission early
             if shoot_agent.end_mission:
@@ -128,6 +158,7 @@ FileIO.save_data("dataset",data_set)
 # Graph results
 if graphing:
     Graphing.FitData(data_set.hori_shots[0] + data_set.hori_shots[1])
+    #Graphing.RegressionLine()
     Graphing.HorizontalDataGraph()
     Graphing.HorizontalPredictionGraph()
     Graphing.FitData(data_set.vert_shots[0] + data_set.vert_shots[1])
