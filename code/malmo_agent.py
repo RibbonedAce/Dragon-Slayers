@@ -145,9 +145,10 @@ AIMING = 0
 SHOOT = 1
 class ArrowTracker():
 
-    def __init__(self, malmo_agent, arrow_id, stored_data, aim_data):
+    def __init__(self, malmo_agent, arrow_id, target_id, stored_data, aim_data):
         self.malmo_agent = malmo_agent
         self.arrow_id = arrow_id
+        self.target_id = target_id
         self.track_duration = 50
         self.delete_me = False
         self.target_data = []
@@ -156,7 +157,12 @@ class ArrowTracker():
         self.aim_data = aim_data
         self.count = 0
 
-    def step(self, target_transform, obs):
+    def step(self, obs):
+        target_transform = find_entity_by_id(obs["Mobs"],self.target_id)
+        #Remove self if associated target does not exist
+        if target_transform is None:
+            self.delete_me = True
+            return None
         if self.track_duration > 0:
             self.track_duration -= 1
             self.track_arrow(target_transform, obs)
@@ -234,7 +240,7 @@ class MalmoAgent():
         self.aim_data = []
 
         #Scales turning speed
-        self.turn_speed_multiplier = (1/360)* 2
+        self.turn_speed_multiplier = (1/360)* 2        
 
     def step(self, obs):
         #Run this once a tick
@@ -244,7 +250,7 @@ class MalmoAgent():
         self.process_commands(self.total_time)
 
 
-    def shooter_step(self, shooter_obs, move_agent, target_transform):
+    def shooter_step(self, shooter_obs, move_agent, target):
         '''
         This function:
         1. calls step()
@@ -259,7 +265,7 @@ class MalmoAgent():
         result = False
         self.step(shooter_obs)
         #Abort if no target to aim at/record data for
-        if target_transform is None:
+        if target.transform is None:
             return None
         self.aim_data.append((self.transform["yaw"], -self.transform["pitch"], time.time()))
         mover_obs = move_agent._obs
@@ -272,8 +278,7 @@ class MalmoAgent():
                     #aim_iteration is used to calculate rotation speed
                     self.agent.sendCommand("use 1")
                     result = True
-                    self.desired_yaw, self.desired_pitch = self.calculate_desired_aim(target_transform)
-                    
+                    self.desired_yaw, self.desired_pitch = self.calculate_desired_aim(target.transform)
                 self.aim_timer += 1
                 aiming_complete = self.aim_step(self.desired_yaw, self.desired_pitch)
                 
@@ -302,12 +307,12 @@ class MalmoAgent():
             if arrow != None:
                 #add to set and stop listening for arrows
                 self.arrow_ids.add(arrow["id"])
-                self.arrow_trackers.append(ArrowTracker(self,arrow["id"], self.stored_data, self.aim_data))
+                self.arrow_trackers.append(ArrowTracker(self,arrow["id"], target.id, self.stored_data, self.aim_data))
                 self.listen_for_new_arrow = False
                 self.aim_data = []
                 
         #Track positions of all arrows in flight
-        self.track_arrows_step(mover_obs,target_transform)
+        self.track_arrows_step(mover_obs)
         return result
 
 
@@ -395,10 +400,10 @@ class MalmoAgent():
         self.aim_on_target_ticks = 0
         return False
 
-    def track_arrows_step(self,mover_obs, target_transform):
+    def track_arrows_step(self,mover_obs):
         #Iterate through arrow trackers
         for tracker in self.arrow_trackers:
-            tracker.step(target_transform, mover_obs)
+            tracker.step(mover_obs)
         #Delete any completed trackers
         for i in reversed(range(len(self.arrow_trackers))):
             if self.arrow_trackers[i].delete_me:

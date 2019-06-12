@@ -12,7 +12,7 @@ class EnemyMission(Mission):
 
     def __init__(self):
         #self.enemy_types = ["Spider", "Ghast", "Blaze", "Creeper", "Cow", "Pig", "Chicken", "Golem"]
-        self.enemy_types = ["Spider"]
+        self.enemy_types = ["Horse"]
 
     def get_mission_xml(self, params):
         return '''<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
@@ -85,7 +85,10 @@ class EnemyMission(Mission):
         enemy = random.choice(self.enemy_types)
         spawn_loc = (params[0],params[1])
         shoot_agent.commands.append((shoot_agent.agent, "chat /summon {} ~{} ~0 ~{}".format(enemy, spawn_loc[0],spawn_loc[1]), 0))
-        shoot_agent.commands.append((shoot_agent.agent, "chat /summon {} ~{} ~0 ~{}".format(enemy, -spawn_loc[0],-spawn_loc[1]), 0))
+        shoot_agent.commands.append((shoot_agent.agent, "chat /summon {} ~{} ~0 ~{}".format(enemy, spawn_loc[0]*1.2,spawn_loc[1]*1.2), 0))
+        shoot_agent.commands.append((shoot_agent.agent, "chat /summon {} ~{} ~0 ~{}".format(enemy, spawn_loc[0]*1,spawn_loc[1]*1.4), 0))
+        shoot_agent.commands.append((shoot_agent.agent, "chat /summon {} ~{} ~0 ~{}".format(enemy, spawn_loc[0]*1.4,spawn_loc[1]*1), 0))
+
 
 
     def get_target(self, entities):

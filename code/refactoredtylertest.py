@@ -25,6 +25,11 @@ from timekeeper import TimeKeeper
 import pickle
 import os.path
 
+class Target():
+
+    def __init__(self):
+        self.transform = None
+        self.id = None
 
 def load_grid(agent):
     global world_state
@@ -66,21 +71,31 @@ def sleep_until(desired_time):
     if current_time <= desired_time:
         time.sleep(desired_time - current_time)
 
-def get_target(obs, target_id):
+def get_target(obs, target):
     #Get existing target
-    target_transform = find_entity_by_id(obs["Mobs"],target_id)
-    if target_id is None or target_transform is None:
+    target.transform = find_entity_by_id(obs["Mobs"],target.id)
+    if target.id is None or target.transform is None:
         #Acquire new target
-        target_transform = my_mission.get_target(obs["Mobs"])
-        target_id = target_transform["id"] if (target_transform is not None) else None
-    return target_transform, target_id
+        target.transform = my_mission.get_target(obs["Mobs"])
+        target.id = target.transform["id"] if (target.transform is not None) else None
+    return target
+
 
 # Launch the clients
 malmo.minecraftbootstrap.launch_minecraft([10001, 10002])
 
 # Create default Malmo objects:
 graphing = False
-my_mission = SimplifiedXStrafingMission()
+
+mission_type = sys.argv[1] if len(sys.argv) > 1 else "staticflyingmission"
+my_mission = StaticFlyingTargetMission()
+if mission_type.lower() == "enemymission":
+    my_mission = EnemyMission()
+elif mission_type.lower() == "staticflyingmission":
+    my_mission = StaticFlyingTargetMission()
+elif mission_type.lower() == "simplifiedxstrafingmission":
+    my_mission = SimplifiedXStrafingMission()
+
 agents = my_mission.two_agent_init()
 iterations = 20
 vert_step_size = 0.5
@@ -112,8 +127,7 @@ try:
         
         world_state = shoot_agent.agent.peekWorldState()
         shoot_agent.reset_shoot_loop()
-        target = None
-        target_id = None
+        target = Target()
         first_target_found = False
         while world_state.is_mission_running:
             shooter_obs = load_grid(shoot_agent.agent)
@@ -121,22 +135,22 @@ try:
             if not shooter_obs or not mover_obs:
                 break
             move_agent.step(mover_obs)
-           
+          
             #get target
-            target_transform, target_id = get_target(mover_obs, target_id)
-            if target_transform is not None:
+            target = get_target(mover_obs, target)
+            if target.transform is not None:
                 first_target_found = True  
-            if target_transform is None and first_target_found:
+            if target.transform is None and first_target_found:
                 #End mission early if no enemies remaining
                 break
 
             #Run shooter ticks if target exists
             #agent step
-            if shoot_agent.shooter_step(shooter_obs, move_agent, target_transform):
+            if shoot_agent.shooter_step(shooter_obs, move_agent, target):
                 #Change mover direction
-                my_mission.ai_toggle(move_agent, target_transform)
+                my_mission.ai_toggle(move_agent, target.transform)
             
-            my_mission.ai_step(move_agent, target_transform)
+            my_mission.ai_step(move_agent, target.transform)
         
             
             #If shoot agent hits target, end mission early
