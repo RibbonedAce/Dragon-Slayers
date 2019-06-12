@@ -175,9 +175,10 @@ if graphing:
     #Graphing.RegressionLine()
     Graphing.HorizontalDataGraph()
     Graphing.HorizontalPredictionGraph()
+
     Graphing.FitData(data_set.vert_shots[0] + data_set.vert_shots[1])
     Graphing.FitErrors(shoot_agent.vert_errors, shoot_agent.hori_errors)
     Graphing.DataGraph()
-    Graphing.PredictionGraph()
+    Graphing.PredictionGraph([None, None, 0], "Angle prediction with YVel=0", "Distance", "Elevation")
     Graphing.ErrorGraph()
     Graphing.AccuracyGraph()
