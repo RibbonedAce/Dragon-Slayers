@@ -291,7 +291,7 @@ class MalmoAgent():
         if self.shoot_state == SHOOT:
             self.agent.sendCommand("use 0")
             self.stored_data = self.current_data
-            self.stored_data[2] = self.transform["yaw"]
+            self.stored_data[3] = self.transform["yaw"]
             if self.shoot_timer < 2:
                 self.shoot_timer += 1
             else:
@@ -324,15 +324,17 @@ class MalmoAgent():
         x_angle = ((obs_angle + 180 + 90) % 360) - 180
         x_velocity = project_vector(np.asarray([target_transform["motionX"], target_transform["motionY"], target_transform["motionZ"]]), vector_from_angle(x_angle))
         x_velocity = math.copysign(magnitude(x_velocity), math.cos(math.radians(get_angle_between(vector_from_angle(x_angle), x_velocity))))
+        y_velocity = project_vector(np.asarray([target_transform["motionX"], target_transform["motionY"], target_transform["motionZ"]]), np.asarray([0, 1, 0]))
+        y_velocity = math.copysign(magnitude(y_velocity), math.cos(math.radians(get_angle_between(np.asarray([0, 1, 0]), y_velocity))))
         z_velocity = project_vector(np.asarray([target_transform["motionX"], target_transform["motionY"], target_transform["motionZ"]]), vector_from_angle(obs_angle))
         z_velocity = math.copysign(magnitude(z_velocity), math.cos(math.radians(get_angle_between(vector_from_angle(obs_angle), z_velocity))))
         #set desired pitch
-        delta_pitch = self.get_first_vert_shot(distance, elevation+1)
+        delta_pitch = self.get_first_vert_shot(distance, elevation+1, y_velocity)
         #set desired yaw
         delta_yaw = self.get_first_hori_shot(rel_angle, distance, x_velocity, z_velocity)
 
         #Store some data points now to use for future data points
-        self.current_data = [x_velocity, z_velocity, self.transform["yaw"]]
+        self.current_data = [x_velocity, y_velocity, z_velocity, self.transform["yaw"]]
         return (((self.transform["yaw"] + delta_yaw + 180) % 360) - 180,-delta_pitch)
 
     def aim_step(self, desiredYaw, desiredPitch):
@@ -411,7 +413,7 @@ class MalmoAgent():
 
     def analyze_arrow_trajectory(self, target_transform, data, target_data, obs, aim_data):        
         player_loc = np.asarray([self.transform["x"], self.transform["y"], self.transform["z"]])
-        pred_velocity = obs[0] * vector_from_angle(((obs[2] + 180 + 90) % 360) - 180) + obs[1] * vector_from_angle(obs[2])
+        pred_velocity = obs[0] * vector_from_angle(((obs[3] + 180 + 90) % 360) - 180) + obs[2] * vector_from_angle(obs[3]) + obs[1] * np.asarray([0, 1, 0])
         
         vert_error = 0
         hori_error = 0
@@ -425,10 +427,10 @@ class MalmoAgent():
             
             for i in range(len(data)):
                 if self.desired_pitch < 85 and (i == 0 or not np.array_equal(data[i][0], data[i-1][0])):
-                    d_elevation = data[i][0][1] - player_loc[1]
                     pred_location = data[i][0] - pred_velocity*(data[i][1]-aim_data[0][2])
+                    d_elevation = pred_location[1] - player_loc[1]
                     #data_preds.append(pred_location)
-                    d_distance = magnitude(pred_location[::2] - np.asarray([self.transform["x"], self.transform["z"]]))
+                    d_distance = magnitude(pred_location[::2] - player_loc[::2])
                     #get arrow position distance from shooter.  Ignore y-difference
                     current_distance_from_player = flat_distance(data[i][0]-player_loc)
 
@@ -439,8 +441,8 @@ class MalmoAgent():
                     #Update previous position
                     last_distance_from_player = current_distance_from_player
                     d_angle = ((get_hori_angle(player_loc[0], player_loc[2], pred_location[0], pred_location[2]) - aim_data[0][0] + 180) % 360) - 180
-                    self.data_set.vert_shots[1].append([d_distance, d_elevation, aim_data[-1][1]])
-                    self.data_set.hori_shots[1].append([d_angle, d_distance, obs[0], obs[1], obs[2] - aim_data[0][0]])
+                    self.data_set.vert_shots[1].append([d_distance, d_elevation, obs[1], aim_data[-1][1]])
+                    self.data_set.hori_shots[1].append([d_angle, d_distance, obs[0], obs[2], obs[3] - aim_data[0][0]])
     
                 #get arrow position distance from shooter.  Ignore y-difference
                 current_distance_from_player = flat_distance(data[i][0]-player_loc)
@@ -453,7 +455,7 @@ class MalmoAgent():
                 last_distance_from_player = current_distance_from_player
 
             #Append errors depending on how close the arrow got
-            print(self.data_set.hori_shots[1][-1])
+            print(self.data_set.vert_shots[1][-1])
             closest_point, target_loc = get_closest_point(data, target_data)
             vert_error = closest_point[1] - target_loc[1]
             hori_error = get_hori_angle(self.transform["x"], self.transform["z"], closest_point[0], closest_point[2]) - \
@@ -524,17 +526,12 @@ class MalmoAgent():
                     self.transform["motionZ"] = (self.transform["z"] - self.transform["prevZ"][0]) / (self.transform["time"] - self.transform["prevTime"][0])
                     
 
-    def get_first_vert_shot(self, distance, elevation):
+    def get_first_vert_shot(self, distance, elevation, y_velocity):
         array = np.asarray(self.data_set.vert_shots[0] + self.data_set.vert_shots[1])
-        if array.shape[0] > 100:
-            if elevation > distance:
-                array = array[array[:,-1] > 45]
-            else:
-                array = array[array[:,-1] <= 45]
-            if self.vert_angle_step >= 45:
-                poly = PolynomialFeatures(3, include_bias=False).fit(array[:,:-1])
-                self.model = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,-1])
-                return min(self.model.predict(poly.transform([[distance, elevation]]))[0], 89.9)
+        if array.shape[0] > 100 and self.vert_angle_step >= 45:
+            poly = PolynomialFeatures(2, include_bias=False).fit(array[:,:-1])
+            self.model = LinearRegression().fit(signed_quadratic_features(poly.transform(array[:,:-1]), 3), array[:,-1])
+            return min(self.model.predict(signed_quadratic_features(poly.transform([[distance, elevation, y_velocity]]), 3))[0], 89.9)
 
         return self.vert_angle_step
 
