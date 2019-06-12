@@ -215,13 +215,13 @@ class MalmoAgent():
 
         #Decide if we need to get data for vertical shots
         if self.data_set and not self.data_set.empty():
-            vert_shots = np.asarray(self.data_set.vert_shots[0] + self.data_set.vert_shots[1])[:,2]
+            vert_shots = np.asarray(self.data_set.vert_shots[0] + self.data_set.vert_shots[1])[:,-1]
             max_angle = np.max(vert_shots)
             min_angle = np.min(vert_shots)
-            self.vert_angle_step = 45 if max_angle - min_angle > 40 else -3
+            self.vert_angle_step = 45 if max_angle - min_angle > 40 else 0
         else:
             self.vert_angle_step = 0
-
+            
         #shooter parameters
         self.reset_shoot_loop()
 
@@ -535,15 +535,6 @@ class MalmoAgent():
 
         return self.vert_angle_step
 
-
-    def get_next_vert_shot(self, prev_angle, error, step_size):
-        bound_angle = prev_angle    
-        if error < 0:
-            bound_angle = 90
-        elif error > 0:
-            bound_angle = 0
-        return prev_angle*(1-step_size) + bound_angle*step_size
-
     def get_first_hori_shot(self, angle, distance, x_velocity, z_velocity):
         array = np.asarray(self.data_set.hori_shots[0] + self.data_set.hori_shots[1])
         if array.shape[0] > 100:
@@ -552,10 +543,6 @@ class MalmoAgent():
             return min(max(-180, self.model.predict(signed_quadratic_features(poly.transform([[angle, distance, x_velocity, z_velocity]]), 4))[0]), 180)
         
         return random.randrange(-180, 180)
-
-    def get_next_hori_shot(self, prev_angle, error, step_size):
-        result = prev_angle - error
-        return ((result + 180) % 360) - 180
 
 
     def process_commands(self, mission_elapsed_time):
