@@ -10,7 +10,7 @@ def fill_inventory():
         result += "<InventoryItem slot=\"" + str(i) + "\" type=\"bow\" quantity=\"1\"/>\n"
     return result
 
-class RandomGroundTargetMission(Mission):
+class GroundTargetMission(Mission):
 
     def __init__(self):
         self.direction = 1
@@ -26,7 +26,7 @@ class RandomGroundTargetMission(Mission):
                 <Summary>Shoot the Target</Summary>
               </About>
             <ModSettings>
-              <MsPerTick>20</MsPerTick>
+              <MsPerTick>50</MsPerTick>
             </ModSettings>
             <ServerSection>
               <ServerInitialConditions>
@@ -38,7 +38,7 @@ class RandomGroundTargetMission(Mission):
               </ServerInitialConditions>
                 <ServerHandlers>
                   <FlatWorldGenerator></FlatWorldGenerator>
-                  <ServerQuitFromTimeUp timeLimitMs="15000"/>
+                  <ServerQuitFromTimeUp timeLimitMs="5000"/>
                 </ServerHandlers>
               </ServerSection>
 

@@ -17,6 +17,7 @@ from Missions.staticflyingtarget import StaticFlyingTargetMission
 from Missions.xstrafingtargetmission import XStrafingTargetMission
 from Missions.simplifiedxstrafingmission import SimplifiedXStrafingMission
 from Missions.enemymission import EnemyMission
+from Missions.groundtargetmission import GroundTargetMission
 from malmo_agent import MalmoAgent
 from graphing import Graphing
 from fileio import FileIO
@@ -85,7 +86,7 @@ def get_target(obs, target):
 malmo.minecraftbootstrap.launch_minecraft([10001, 10002])
 
 # Create default Malmo objects:
-graphing = False
+graphing = True
 
 mission_type = sys.argv[1] if len(sys.argv) > 1 else "staticflyingmission"
 my_mission = StaticFlyingTargetMission()
@@ -95,6 +96,8 @@ elif mission_type.lower() == "staticflyingmission":
     my_mission = StaticFlyingTargetMission()
 elif mission_type.lower() == "simplifiedxstrafingmission":
     my_mission = SimplifiedXStrafingMission()
+elif mission_type.lower() == "groundtargetmission":
+    my_mission = GroundTargetMission()
 
 agents = my_mission.two_agent_init()
 iterations = 20
@@ -102,10 +105,9 @@ vert_step_size = 0.5
 hori_step_size = 0.5
 
 #Load model from file
-model = FileIO.get_model()
 data_set = FileIO.get_data_set()
-shoot_agent = MalmoAgent("Slayer",agents[0],0,0,vert_step_size,hori_step_size,model, data_set)
-move_agent = MalmoAgent("Mover",agents[1],0,0,vert_step_size,hori_step_size,None, None)
+shoot_agent = MalmoAgent("Slayer",agents[0],0,0,vert_step_size,hori_step_size, data_set)
+move_agent = MalmoAgent("Mover",agents[1],0,0,vert_step_size,hori_step_size, data_set)
 
 try:
     for i in range(iterations):
@@ -171,17 +173,20 @@ except KeyboardInterrupt:
     shoot_agent.agent.sendCommand("quit")
     move_agent.agent.sendCommand("quit")
     pass
-#Save model to file
-FileIO.save_data("model",model)
+#Save dataset to file
 FileIO.save_data("dataset",data_set)
 # Graph results
 if graphing:
-    Graphing.FitData(data_set.hori_shots[0] + data_set.hori_shots[1])
+    Graphing.FitData(data_set.hori_leading)
+    Graphing.PredictionGraph([10,None,0], "Horizontal Aim Compensation", "x_velocity", "Degrees adjusted")
+    Graphing.FitData(data_set.hori_shots)
+    Graphing.RegressionLine()
+    
     #Graphing.RegressionLine()
     Graphing.HorizontalDataGraph()
     Graphing.HorizontalPredictionGraph()
 
-    Graphing.FitData(data_set.vert_shots[0] + data_set.vert_shots[1])
+    Graphing.FitData(data_set.vert_shots)
     Graphing.FitErrors(shoot_agent.vert_errors, shoot_agent.hori_errors)
     Graphing.DataGraph()
     Graphing.PredictionGraph([None, None, 0], "Angle prediction with YVel=0", "Distance", "Elevation")

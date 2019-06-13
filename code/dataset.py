@@ -2,12 +2,14 @@
 
 class DataSet():
 
-    def __init__(self, horizontal_shots=[[],[]], vertical_shots=[[],[]]):
+    def __init__(self, horizontal_shots=[], vertical_shots=[], hori_leading=[], vert_leading=[]):
         self.hori_shots = horizontal_shots
+        self.hori_leading = hori_leading
         self.vert_shots = vertical_shots
+        self.vert_leading= vert_leading
 
     def empty(self):
-        return self.hori_shots == [[], []] or self.vert_shots == [[], []]
+        return self.hori_shots == [] or self.vert_shots == []
 
 
 

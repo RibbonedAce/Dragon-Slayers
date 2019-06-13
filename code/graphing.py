@@ -157,3 +157,19 @@ class Graphing:
         plt.title("Accuracy over last 5 shots")
         plt.xlabel("Last shot")
         plt.show()
+
+
+    def RegressionLine():
+        poly = PolynomialFeatures(2, include_bias=False).fit(Graphing.array[:,0:1])
+        predictor = LinearRegression().fit(signed_quadratic_features(poly.transform(Graphing.array[:,0:1]),Graphing.array.shape[1]-1), Graphing.array[:,-1])
+        xx = np.linspace(-180, 180, 100)
+        yy = np.zeros(100)
+        for i in range(len(xx)):
+            yy[i] = predictor.predict(signed_quadratic_features(poly.transform([[xx[i]]]), Graphing.array.shape[1]-1))[0]
+        plt.plot(xx, yy, color='blue',linewidth=2,label="Predicted delta angle")
+        plt.plot(xx,xx, color='green',label="y=x")
+        plt.legend()
+        plt.title("Horizontal Angle Regression Predictions")
+        plt.xlabel("Delta horizontal angle")
+        plt.ylabel("Predicted delta angle")
+        plt.show()
