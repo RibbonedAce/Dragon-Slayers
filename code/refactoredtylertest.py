@@ -18,6 +18,7 @@ from Missions.xstrafingtargetmission import XStrafingTargetMission
 from Missions.simplifiedxstrafingmission import SimplifiedXStrafingMission
 from Missions.enemymission import EnemyMission
 from Missions.groundtargetmission import GroundTargetMission
+from Missions.staticstandingtarget import StaticStandingTargetMission
 from malmo_agent import MalmoAgent
 from graphing import Graphing
 from fileio import FileIO
@@ -74,12 +75,55 @@ def sleep_until(desired_time):
 
 def get_target(obs, target):
     #Get existing target
-    target.transform = find_entity_by_id(obs["Mobs"],target.id)
-    if target.id is None or target.transform is None:
+    new_transform = find_entity_by_id(obs["Mobs"],target.id)
+    if new_transform is None:
         #Acquire new target
         target.transform = my_mission.get_target(obs["Mobs"])
         target.id = target.transform["id"] if (target.transform is not None) else None
+    else:
+        update_target_transform(target, new_transform)
+        target.id = target.transform["id"]
     return target
+
+def update_target_transform(target, transform):
+    has_prev = "prevTime" in target.transform
+    if has_prev:
+        # Append past data
+        target.transform["prevX"].append(target.transform["x"])
+        if len(target.transform["prevX"]) > 4:
+            target.transform["prevX"].pop(0)
+        target.transform["prevY"].append(target.transform["y"])
+        if len(target.transform["prevY"]) > 4:
+            target.transform["prevY"].pop(0)
+        target.transform["prevZ"].append(target.transform["z"])
+        if len(target.transform["prevZ"]) > 4:
+            target.transform["prevZ"].pop(0)
+        target.transform["prevTime"].append(target.transform["time"])
+        if len(target.transform["prevTime"]) > 4:
+            target.transform["prevTime"].pop(0)
+        
+    else:
+        # Create past data if none exists
+        target.transform = {}
+        target.transform["prevX"] = []
+        target.transform["prevY"] = []
+        target.transform["prevZ"] = []
+        target.transform["prevTime"] = []
+
+    # Apply stats not found in normal transforms
+    old_transform = target.transform
+    target.transform = transform
+    target.transform["prevX"] = old_transform["prevX"]
+    target.transform["prevY"] = old_transform["prevY"]
+    target.transform["prevZ"] = old_transform["prevZ"]
+    target.transform["prevTime"] = old_transform["prevTime"]
+    target.transform["time"] = time.time()
+
+    # Calculate velocity
+    if has_prev:
+        target.transform["motionX"] = (target.transform["x"] - target.transform["prevX"][0]) / (target.transform["time"] - target.transform["prevTime"][0])
+        target.transform["motionY"] = (target.transform["y"] - target.transform["prevY"][0]) / (target.transform["time"] - target.transform["prevTime"][0])
+        target.transform["motionZ"] = (target.transform["z"] - target.transform["prevZ"][0]) / (target.transform["time"] - target.transform["prevTime"][0])
 
 
 # Launch the clients
@@ -98,6 +142,8 @@ elif mission_type.lower() == "simplifiedxstrafingmission":
     my_mission = SimplifiedXStrafingMission()
 elif mission_type.lower() == "groundtargetmission":
     my_mission = GroundTargetMission()
+elif mission_type.lower() == "staticstandingmission":
+    my_mission = StaticStandingTargetMission()
 
 agents = my_mission.two_agent_init()
 iterations = 20
@@ -112,7 +158,7 @@ move_agent = MalmoAgent("Mover",agents[1],0,0,vert_step_size,hori_step_size, dat
 try:
     for i in range(iterations):
         time.sleep(1)
-        params = (random.randint(10, 30)*random.randrange(-1, 2, 2), random.randint(10, 30)*random.randrange(-1, 2, 2), random.randint(10, 30))
+        params = (random.randint(30, 50)*random.randrange(-1, 2, 2), random.randint(30, 50)*random.randrange(-1, 2, 2), random.randint(10, 20))
         mission = MalmoPython.MissionSpec(my_mission.get_mission_xml(params), True)
         my_mission.load_duo_mission(mission, agents)
         shoot_agent.reset()
@@ -180,7 +226,6 @@ if graphing:
     Graphing.FitData(data_set.hori_leading)
     Graphing.PredictionGraph([10,None,0], "Horizontal Aim Compensation", "x_velocity", "Degrees adjusted")
     Graphing.FitData(data_set.hori_shots)
-    Graphing.RegressionLine()
 
     Graphing.FitData(data_set.vert_shots)
     Graphing.FitErrors(shoot_agent.vert_errors, shoot_agent.hori_errors)

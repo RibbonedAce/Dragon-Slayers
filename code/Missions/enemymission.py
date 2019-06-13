@@ -36,7 +36,7 @@ class EnemyMission(Mission):
                 </ServerHandlers>
               </ServerSection>
 
-              <AgentSection mode="Survival">
+              <AgentSection mode="Creative">
                 <Name>Slayer</Name>
                 <AgentStart>
                     <Placement x="0.5" y="4" z="0.5" yaw="0"/>

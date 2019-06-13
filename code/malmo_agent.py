@@ -233,7 +233,7 @@ class MalmoAgent():
 
     def reset_shoot_loop(self):
         self.min_aim_duration = 20
-        self.max_record_duration = 50 #ticks
+        self.max_record_duration = 120 #ticks
         self.shoot_state = AIMING
         self.aim_timer = 0
         self.shoot_timer = 0
@@ -462,6 +462,7 @@ class MalmoAgent():
             if self.desired_pitch < 85 and (i == 0 or not np.array_equal(arrow_loc, prev_arrow_loc)):
                 future_location = arrow_loc + pred_velocity*(timestamp-aim_data[0][2])
                 pred_angle = get_hori_angle(player_loc[0], player_loc[2], future_location[0], future_location[2]) - get_hori_angle(player_loc[0], player_loc[2], arrow_loc[0], arrow_loc[2])
+                pred_vert_angle = self.get_pitch_to_target(magnitude(future_location[::2] - player_loc[::2]), future_location[1] - player_loc[1])
                 d_elevation = arrow_loc[1] - player_loc[1]
                 #data_preds.append(pred_location)
                 d_distance = magnitude(arrow_loc[::2] - player_loc[::2])
@@ -486,7 +487,7 @@ class MalmoAgent():
                 d_angle = ((get_hori_angle(player_loc[0], player_loc[2], arrow_loc[0], arrow_loc[2]) - aim_data[0][0] + 180) % 360) - 180
                 self.data_set.vert_shots.append([d_distance, d_elevation, aim_data[-1][1]])
                 if self.vert_train_state == MOVING:
-                    self.data_set.vert_leading.append([d_distance, d_elevation, y_vel, aim_data[-1][1]])
+                    self.data_set.vert_leading.append([d_distance, d_elevation, y_vel, pred_vert_angle - aim_data[-1][1]])
 
                 self.data_set.hori_shots.append([d_angle, angle_clamp(player_yaw - aim_data[0][0])])
                 if self.hori_train_state == MOVING:
@@ -506,7 +507,6 @@ class MalmoAgent():
     def set_obs(self, obs):
         if not obs:
             return
-        has_prev = True if self._obs else False
         self._obs = obs
         has_prev = self.transform is not None
         for entity in self._obs["Mobs"]:
@@ -551,19 +551,23 @@ class MalmoAgent():
 
 
     def calculate_pitch(self, distance, elevation, y_velocity):
-        self.vert_train_state = STATIC #Update this line when good switching condition is known
         #Return combined delta pitch to hit a target
         delta_pitch = self.get_pitch_to_target(distance, elevation)
-        if self.vert_train_state == MOVING:
-            delta_pitch += 0 #self.get_leading_pitch(distance, elevation, y_velocity)
+        delta_pitch += self.get_leading_pitch(distance, elevation, y_velocity)
         return delta_pitch
 
     def get_pitch_to_target(self, distance, elevation):
         #returns pitch needed to aim at target at its current position
         array = np.asarray(self.data_set.vert_shots)
         if array.shape[0] > 100:
-            poly = PolynomialFeatures(3, include_bias=False).fit(array[:,:-1])
-            model = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,-1])
+            if elevation > distance:
+                filteredArray = array[array[:,-1] > 45]
+            else:
+                filteredArray = array[array[:,-1] <= 45]
+            if filteredArray.shape[0] == 0:
+                return self.vert_angle_step
+            poly = PolynomialFeatures(3, include_bias=False).fit(filteredArray[:,:-1])
+            model = LinearRegression().fit(poly.transform(filteredArray[:,:-1]), filteredArray[:,-1])
             return min(model.predict(poly.transform([[distance, elevation]]))[0], 89.9)
 
         return self.vert_angle_step
@@ -576,7 +580,7 @@ class MalmoAgent():
             model = LinearRegression().fit(signed_quadratic_features(poly.transform(array[:,:-1]), 3), array[:,-1])
             return min(model.predict(signed_quadratic_features(poly.transform([[distance, elevation, y_velocity]]), 3))[0], 89.9)
 
-        return self.vert_angle_step
+        return 0
         
     def calculate_yaw(self, angle, distance, x_velocity, z_velocity):
         #self.hori_train_state = STATIC if len(self.data_set.hori_shots) < 500 else MOVING
@@ -603,7 +607,7 @@ class MalmoAgent():
             model = LinearRegression().fit(signed_quadratic_features(poly.transform(array[:,:-1]), 3), array[:,-1])
             return min(max(-180, model.predict(signed_quadratic_features(poly.transform([[distance, x_velocity, z_velocity]]), 3))[0]), 180)
         
-        return random.randrange(-180, 180)
+        return 0
 
     def process_commands(self, mission_elapsed_time):
         for command in self.commands:

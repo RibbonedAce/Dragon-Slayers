@@ -5,7 +5,6 @@ import math
 
 class StaticFlyingTargetMission(Mission):
 
-    
     def chat_command_init(self, shoot_agent, move_agent, params):
       shoot_agent.commands.append((shoot_agent.agent, "chat /kill @e[type=!player]", 0))
       shoot_agent.commands.append((shoot_agent.agent, "hotbar.1 1", 0))
