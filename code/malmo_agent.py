@@ -460,10 +460,11 @@ class MalmoAgent():
             prev_arrow_loc = arrow_data[i-1][0]
             timestamp = arrow_data[i][1]
             if self.desired_pitch < 85 and (i == 0 or not np.array_equal(arrow_loc, prev_arrow_loc)):
-                pred_location = arrow_loc - pred_velocity*(timestamp-aim_data[0][2])
-                d_elevation = pred_location[1] - player_loc[1]
+                future_location = arrow_loc + pred_velocity*(timestamp-aim_data[0][2])
+                pred_angle = get_hori_angle(player_loc[0], player_loc[2], future_location[0], future_location[2]) - get_hori_angle(player_loc[0], player_loc[2], arrow_loc[0], arrow_loc[2])
+                d_elevation = arrow_loc[1] - player_loc[1]
                 #data_preds.append(pred_location)
-                d_distance = magnitude(pred_location[::2] - player_loc[::2])
+                d_distance = magnitude(arrow_loc[::2] - player_loc[::2])
                 #get arrow position distance from shooter.  Ignore y-difference
                 current_distance_from_player = flat_distance(arrow_loc-player_loc)
 
@@ -471,29 +472,28 @@ class MalmoAgent():
                 if i > 1 and current_distance_from_player < last_distance_from_player:
                     reverse_ticks += 1
 
+                #Break if bounced off target
+                if reverse_ticks >= 2:
+                    self.data_set.vert_shots.pop(-1)
+                    self.data_set.hori_shots.pop(-1)
+                    if self.vert_train_state == MOVING:
+                        self.data_set.vert_leading.pop(-1)
+                        self.data_set.hori_leading.pop(-1)
+                    break
+                
                 #Update previous position
                 last_distance_from_player = current_distance_from_player
-                d_angle = ((get_hori_angle(player_loc[0], player_loc[2], pred_location[0], pred_location[2]) - aim_data[0][0] + 180) % 360) - 180
-                if self.vert_train_state == STATIC:
-                    self.data_set.vert_shots.append([d_distance, d_elevation, aim_data[-1][1]])
-                elif self.vert_train_state == MOVING:
+                d_angle = ((get_hori_angle(player_loc[0], player_loc[2], arrow_loc[0], arrow_loc[2]) - aim_data[0][0] + 180) % 360) - 180
+                self.data_set.vert_shots.append([d_distance, d_elevation, aim_data[-1][1]])
+                if self.vert_train_state == MOVING:
                     self.data_set.vert_leading.append([d_distance, d_elevation, y_vel, aim_data[-1][1]])
 
-                if self.hori_train_state == STATIC:
-                    self.data_set.hori_shots.append([d_angle, player_yaw - aim_data[0][0]])
-                elif self.hori_train_state == MOVING:
-                    self.data_set.hori_leading.append([d_distance, x_vel, z_vel, player_yaw - aim_data[0][0]])
-                  
+                self.data_set.hori_shots.append([d_angle, angle_clamp(player_yaw - aim_data[0][0])])
+                if self.hori_train_state == MOVING:
+                    self.data_set.hori_leading.append([d_distance, x_vel, z_vel, pred_angle])
 
-            #get arrow position distance from shooter.  Ignore y-difference
-            current_distance_from_player = flat_distance(arrow_loc-player_loc)
-
-            #Arrow hits if arrow's distance from player decreases.  Arrow's should strictly move away from the player's shooting position if they do not hit anyone
-            if i > 1 and current_distance_from_player < last_distance_from_player:
-                reverse_ticks += 1
-
-            #Update previous position
-            last_distance_from_player = current_distance_from_player
+                #Update previous position
+                last_distance_from_player = current_distance_from_player
         #An arrow hits the target if it has moved backward for more than 2 ticks
         return reverse_ticks > 2
 
@@ -555,16 +555,16 @@ class MalmoAgent():
         #Return combined delta pitch to hit a target
         delta_pitch = self.get_pitch_to_target(distance, elevation)
         if self.vert_train_state == MOVING:
-            delta_pitch += self.get_leading_pitch(distance, elevation, y_velocity)
+            delta_pitch += 0 #self.get_leading_pitch(distance, elevation, y_velocity)
         return delta_pitch
 
     def get_pitch_to_target(self, distance, elevation):
         #returns pitch needed to aim at target at its current position
         array = np.asarray(self.data_set.vert_shots)
-        if array.shape[0] > 0:
-            poly = PolynomialFeatures(2, include_bias=False).fit(array[:,:-1])
-            model = LinearRegression().fit(signed_quadratic_features(poly.transform(array[:,:-1]), 2), array[:,-1])
-            return min(model.predict(signed_quadratic_features(poly.transform([[distance, elevation]]), 2))[0], 89.9)
+        if array.shape[0] > 100:
+            poly = PolynomialFeatures(3, include_bias=False).fit(array[:,:-1])
+            model = LinearRegression().fit(poly.transform(array[:,:-1]), array[:,-1])
+            return min(model.predict(poly.transform([[distance, elevation]]))[0], 89.9)
 
         return self.vert_angle_step
 
@@ -582,13 +582,11 @@ class MalmoAgent():
         #self.hori_train_state = STATIC if len(self.data_set.hori_shots) < 500 else MOVING
         #Return combined delta yaw to hit a target
         delta_yaw = self.get_yaw_to_target(angle)
-        if self.hori_train_state == MOVING:
-            delta_yaw += self.get_leading_yaw(distance,x_velocity,z_velocity)
+        delta_yaw += self.get_leading_yaw(distance,x_velocity,z_velocity)
         return delta_yaw
 
     def get_yaw_to_target(self, angle):
         #returns yaw needed to aim at target at its current position
-        return angle
         array = np.asarray(self.data_set.hori_shots)
         if array.shape[0] > 100:
             poly = PolynomialFeatures(1, include_bias=False).fit(array[:,:-1])

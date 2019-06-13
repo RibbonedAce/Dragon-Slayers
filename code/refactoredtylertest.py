@@ -88,7 +88,7 @@ malmo.minecraftbootstrap.launch_minecraft([10001, 10002])
 # Create default Malmo objects:
 graphing = True
 
-mission_type = sys.argv[1] if len(sys.argv) > 1 else "staticflyingmission"
+mission_type = sys.argv[1] if len(sys.argv) > 1 else "enemymission"
 my_mission = StaticFlyingTargetMission()
 if mission_type.lower() == "enemymission":
     my_mission = EnemyMission()
@@ -181,14 +181,10 @@ if graphing:
     Graphing.PredictionGraph([10,None,0], "Horizontal Aim Compensation", "x_velocity", "Degrees adjusted")
     Graphing.FitData(data_set.hori_shots)
     Graphing.RegressionLine()
-    
-    #Graphing.RegressionLine()
-    Graphing.HorizontalDataGraph()
-    Graphing.HorizontalPredictionGraph()
 
     Graphing.FitData(data_set.vert_shots)
     Graphing.FitErrors(shoot_agent.vert_errors, shoot_agent.hori_errors)
     Graphing.DataGraph()
-    Graphing.PredictionGraph([None, None, 0], "Angle prediction with YVel=0", "Distance", "Elevation")
+    Graphing.PredictionGraph([None, None], "Angle prediction", "Distance", "Elevation")
     Graphing.ErrorGraph()
     Graphing.AccuracyGraph()

@@ -73,8 +73,6 @@ class Graphing:
         for i in range(len(defaults)):
             if defaults[i] is None:
                 indices.append(i)
-
-        print(indices)
         assert len(indices) < 3, "Need exactly 1 or 2 non-default values in samples"
         
         poly = PolynomialFeatures(2, include_bias=False).fit(Graphing.array[:,:-1])
@@ -160,12 +158,12 @@ class Graphing:
 
 
     def RegressionLine():
-        poly = PolynomialFeatures(2, include_bias=False).fit(Graphing.array[:,0:1])
-        predictor = LinearRegression().fit(signed_quadratic_features(poly.transform(Graphing.array[:,0:1]),Graphing.array.shape[1]-1), Graphing.array[:,-1])
+        poly = PolynomialFeatures(1, include_bias=False).fit(Graphing.array[:,0:1])
+        predictor = LinearRegression().fit(poly.transform(Graphing.array[:,0:1]), Graphing.array[:,-1])
         xx = np.linspace(-180, 180, 100)
         yy = np.zeros(100)
         for i in range(len(xx)):
-            yy[i] = predictor.predict(signed_quadratic_features(poly.transform([[xx[i]]]), Graphing.array.shape[1]-1))[0]
+            yy[i] = predictor.predict(poly.transform([[xx[i]]]))[0]
         plt.plot(xx, yy, color='blue',linewidth=2,label="Predicted delta angle")
         plt.plot(xx,xx, color='green',label="y=x")
         plt.legend()
