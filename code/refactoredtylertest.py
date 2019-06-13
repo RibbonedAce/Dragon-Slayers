@@ -129,7 +129,9 @@ try:
         shoot_agent.reset_shoot_loop()
         target = Target()
         first_target_found = False
+        initial_delay = 5
         while world_state.is_mission_running:
+            
             shooter_obs = load_grid(shoot_agent.agent)
             mover_obs = load_grid(move_agent.agent)
             if not shooter_obs or not mover_obs:
@@ -146,9 +148,12 @@ try:
 
             #Run shooter ticks if target exists
             #agent step
-            if shoot_agent.shooter_step(shooter_obs, move_agent, target):
-                #Change mover direction
-                my_mission.ai_toggle(move_agent, target.transform)
+            if initial_delay > 0:
+                initial_delay -= 1
+            else:
+                if shoot_agent.shooter_step(shooter_obs, move_agent, target):
+                    #Change mover direction
+                    my_mission.ai_toggle(move_agent, target.transform)
             
             my_mission.ai_step(move_agent, target.transform)
         

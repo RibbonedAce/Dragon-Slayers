@@ -140,7 +140,8 @@ def get_closest_point(curve, target):
             min_distance = dist
 
     return point1, point2
-
+def angle_clamp(angle):
+    return ((angle + 180) % 360) - 180
 AIMING = 0
 SHOOT = 1
 class ArrowTracker():
@@ -206,7 +207,6 @@ class MalmoAgent():
         self.desired_pitch = pitch
         self.desired_yaw = yaw
         self.last_shot = 0
-        self.stored_data = []
         #Data set encapsulates hori_shots and vert_shots
         self.data_set = data_set
         self.hori_errors = []
@@ -238,7 +238,8 @@ class MalmoAgent():
         self.arrow_ids = set()
         self.arrow_trackers = []
         self.aim_data = []
-
+        self.stored_data = []
+        self.current_data = []
         #Scales turning speed
         self.turn_speed_multiplier = (1/360)* 2        
 
@@ -267,7 +268,7 @@ class MalmoAgent():
         #Abort if no target to aim at/record data for
         if target.transform is None:
             return None
-        self.aim_data.append((self.transform["yaw"], -self.transform["pitch"], time.time()))
+        self.aim_data.append((angle_clamp(self.transform["yaw"]), -self.transform["pitch"], time.time()))
         mover_obs = move_agent._obs
 
         #aims over max_aim_duration many ticks
@@ -291,7 +292,7 @@ class MalmoAgent():
         if self.shoot_state == SHOOT:
             self.agent.sendCommand("use 0")
             self.stored_data = self.current_data
-            self.stored_data[3] = self.transform["yaw"]
+            self.stored_data[3] = angle_clamp(self.transform["yaw"])
             if self.shoot_timer < 2:
                 self.shoot_timer += 1
             else:
@@ -357,7 +358,7 @@ class MalmoAgent():
             pitch_diff = desiredPitch - current_pitch
 
         #If aiming at the right angle, return true
-        allowable_deviation = 0.2 #degrees
+        allowable_deviation = 0.05 #degrees
         '''
         The curve from [0,1] is modified by exponentiating the value.
         This adjusts speeds when near 0 or near 1.
@@ -411,12 +412,14 @@ class MalmoAgent():
             if self.arrow_trackers[i].delete_me:
                 self.arrow_trackers.pop(i)
 
-    def analyze_arrow_trajectory(self, target_transform, data, target_data, obs, aim_data):        
+    def analyze_arrow_trajectory(self, target_transform, data, target_data, obs, aim_data): 
+        #target_transform, self.arrow_data, self.target_data, self.stored_data, self.aim_data
         player_loc = np.asarray([self.transform["x"], self.transform["y"], self.transform["z"]])
         pred_velocity = obs[0] * vector_from_angle(((obs[3] + 180 + 90) % 360) - 180) + obs[2] * vector_from_angle(obs[3]) + obs[1] * np.asarray([0, 1, 0])
         
         vert_error = 0
         hori_error = 0
+        #print(obs[2] - aim_data[0][0])
         if len(data) > 0:
             #data_preds = []
             last_distance_from_player = 0
