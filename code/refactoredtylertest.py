@@ -19,6 +19,7 @@ from Missions.simplifiedxstrafingmission import SimplifiedXStrafingMission
 from Missions.enemymission import EnemyMission
 from Missions.groundtargetmission import GroundTargetMission
 from Missions.staticstandingtarget import StaticStandingTargetMission
+from Missions.floatingtargetmission import FloatingTargetMission
 from malmo_agent import MalmoAgent
 from graphing import Graphing
 from fileio import FileIO
@@ -144,6 +145,8 @@ elif mission_type.lower() == "groundtargetmission":
     my_mission = GroundTargetMission()
 elif mission_type.lower() == "staticstandingmission":
     my_mission = StaticStandingTargetMission()
+elif mission_type.lower() == "floatingtargetmission":
+    my_mission = FloatingTargetMission()
 
 agents = my_mission.two_agent_init()
 iterations = 20
