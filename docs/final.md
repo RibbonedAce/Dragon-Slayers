@@ -105,7 +105,7 @@ Total Accuracy: 98/130 -- 0.7538461538461538
 This is the agent's accuracy against a non-moving static target that is in the air. There is a clear upward trend as the agent rapidly learns how to aim at targets that do not move. It is very simple to generate an optimal regression curve when velocity is not a factor in aiming. This perfect accuracy means that the linear regression model has accurately modeled the physics of the world and is able to predict how high the agent needs to aim to hit targets in the air or at distance.
 #### Moving Targets
 <p align="center">
-    <img src="images/StillAccuracyGraph.png" height="250">
+    <img src="images/XAccuracyGraph.png" height="250">
 </p>
 Total Accuracy: 33/56 -- 0.5892857142857143
 This is the agent's accuracy against moving targets on the ground. There is an upward trend as the agent learns to hit moving targets, but it doesn't hit as many shots as we would like it to. While the AI is capable of leading moving targets, it does so inconsistently. Still, this is better performance than an AI that does not attempt to adjust for target movement. The AI has made a great deal of progress to reach the performance it has, but it is far from optimal. It is possible that the agent is experiencing overfitting, which is preventing it from accurately leading targets in unknown situations. 
