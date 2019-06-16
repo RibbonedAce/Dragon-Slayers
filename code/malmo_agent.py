@@ -466,14 +466,20 @@ class MalmoAgent():
             prev_arrow_loc = arrow_data[i-1][0]
             timestamp = arrow_data[i][1]
             if self.desired_pitch < 85 and (i == 0 or not np.array_equal(arrow_loc, prev_arrow_loc)):
-                future_location = arrow_loc + pred_velocity*(timestamp-aim_data[0][2])
+                past_location = arrow_loc - pred_velocity*(timestamp-aim_data[0][2])
                 ori_angle = angle_clamp(get_hori_angle(player_loc[0], player_loc[2], arrow_loc[0], arrow_loc[2]) - aim_data[0][0])
-                pred_angle = angle_clamp(get_hori_angle(player_loc[0], player_loc[2], future_location[0], future_location[2]) - aim_data[0][0])
+                pred_angle = angle_clamp(get_hori_angle(player_loc[0], player_loc[2], past_location[0], past_location[2]) - aim_data[0][0])
                 ori_vert_angle = self.get_pitch_to_target(magnitude(arrow_loc[::2] - player_loc[::2]), arrow_loc[1] - player_loc[1])
-                pred_vert_angle = self.get_pitch_to_target(magnitude(future_location[::2] - player_loc[::2]), future_location[1] - player_loc[1])
-                d_elevation = arrow_loc[1] - player_loc[1]
+                pred_vert_angle = self.get_pitch_to_target(magnitude(past_location[::2] - player_loc[::2]), past_location[1] - player_loc[1])
+                past_angle = get_hori_angle(player_loc[0], player_loc[2], past_location[0], past_location[2])
+                past_x_vel = project_vector(pred_velocity, vector_from_angle(angle_clamp(past_angle + 90)))
+                past_x_vel = math.copysign(magnitude(past_x_vel), math.cos(math.radians(get_angle_between(vector_from_angle(angle_clamp(past_angle + 90)), past_x_vel))))
+                past_z_vel = project_vector(pred_velocity, vector_from_angle(past_angle))
+                past_z_vel = math.copysign(magnitude(past_z_vel), math.cos(math.radians(get_angle_between(vector_from_angle(past_angle), past_z_vel))))
+                d_elevation = past_location[1] - player_loc[1]
+                d_angle = angle_clamp(get_hori_angle(player_loc[0], player_loc[2], past_location[0], past_location[2]) - aim_data[0][0])
                 #data_preds.append(pred_location)
-                d_distance = magnitude(arrow_loc[::2] - player_loc[::2])
+                d_distance = magnitude(past_location[::2] - player_loc[::2])
                 #get arrow position distance from shooter.  Ignore y-difference
                 current_distance_from_player = flat_distance(arrow_loc-player_loc)
 
@@ -492,15 +498,15 @@ class MalmoAgent():
                 
                 #Update previous position
                 last_distance_from_player = current_distance_from_player
-                d_angle = angle_clamp(get_hori_angle(player_loc[0], player_loc[2], arrow_loc[0], arrow_loc[2]) - aim_data[0][0])
+
                 self.data_set.vert_shots.append([d_distance, d_elevation, aim_data[-1][1]])
                 if self.vert_train_state == MOVING:
-                    self.data_set.vert_leading.append([d_distance, d_elevation, y_vel, pred_vert_angle - ori_vert_angle])
+                    self.data_set.vert_leading.append([d_distance, d_elevation, y_vel, ori_vert_angle - pred_vert_angle])
                 
                 if aim_data[-1][1] < 80 and aim_data[-1][1] > -45:
                     self.data_set.hori_shots.append([d_angle, angle_clamp(aim_data[-1][0] - aim_data[0][0])])
                     if self.hori_train_state == MOVING:
-                        self.data_set.hori_leading.append([d_distance, x_vel, z_vel, angle_clamp(pred_angle - ori_angle)])
+                        self.data_set.hori_leading.append([d_distance, past_x_vel, past_z_vel, angle_clamp(ori_angle - pred_angle)])
 
                 #Update previous position
                 last_distance_from_player = current_distance_from_player

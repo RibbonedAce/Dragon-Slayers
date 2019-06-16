@@ -165,7 +165,7 @@ mission_accuracies = []
 try:
     for i in range(iterations):
         time.sleep(1)
-        params = (random.randint(30, 50)*random.randrange(-1, 2, 2), random.randint(10, 30)*random.randrange(-1, 2, 2), random.randint(30, 50))
+        params = (random.randint(10, 30)*random.randrange(-1, 2, 2), random.randint(10, 30)*random.randrange(-1, 2, 2), random.randint(10, 30))
         mission = MalmoPython.MissionSpec(my_mission.get_mission_xml(params), True)
         my_mission.load_duo_mission(mission, agents)
         shoot_agent.reset()
