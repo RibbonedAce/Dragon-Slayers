@@ -4,7 +4,7 @@ title:  Final Report
 ---
 
 ## Video
-<iframe width="560" height="315" src="https://www.youtube.com/embed/K5Zn3xCUkDA" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/fhauQzM92Cc" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 ## Project Summary
 The goal of our project is to teach an agent to aim and shoot at enemies with a bow. Because arrows take time to travel and are affected by gravity, successfully hitting targets is not a trivial task. The agent will need to learn to aim higher for airborne or distant targets. Targets can also move in any direction and the agent must become capable of compensating for the target's velocity when aiming. The map will be a flat world with no obstacles that would affect aiming. One additional requirement our team decided on was that the agent should not require any human intervention when training. If the agent were to be dropped into an environment with no knowledge, it should be capable of learning how to hit any target to the best of its ability. Because our team is using a linear regression model, this means that all data points must be collected by the agent and that it must be able to begin with an empty data set.
