@@ -40,7 +40,7 @@ class SimplifiedXStrafingMission(Mission):
                 </ServerHandlers>
               </ServerSection>
 
-              <AgentSection mode="Survival">
+              <AgentSection mode="Creative">
                 <Name>Slayer</Name>
                 <AgentStart>
                     <Placement x="0.5" y="4" z="0.5" yaw="0"/>
@@ -60,7 +60,7 @@ class SimplifiedXStrafingMission(Mission):
                 </AgentHandlers>
               </AgentSection>
               
-              <AgentSection mode="Creative">
+              <AgentSection mode="Survival">
                 <Name>Mover</Name>
                 <AgentStart>
                     <Placement x="'''+str(params[0])+'''" y="4" z="'''+str(params[1])+'''" yaw="'''+str(angle)+'''"/>

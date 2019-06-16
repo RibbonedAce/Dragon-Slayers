@@ -133,7 +133,7 @@ def update_target_transform(target, transform):
 malmo.minecraftbootstrap.launch_minecraft([10001, 10002])
 
 # Create default Malmo objects:
-graphing = True
+graphing = False
 
 mission_type = sys.argv[1] if len(sys.argv) > 1 else "enemymission"
 my_mission = StaticFlyingTargetMission()
@@ -165,7 +165,7 @@ mission_accuracies = []
 try:
     for i in range(iterations):
         time.sleep(1)
-        params = (random.randint(10, 20)*random.randrange(-1, 2, 2), random.randint(10, 20)*random.randrange(-1, 2, 2), random.randint(10, 20))
+        params = (random.randint(30, 50)*random.randrange(-1, 2, 2), random.randint(10, 30)*random.randrange(-1, 2, 2), random.randint(30, 50))
         mission = MalmoPython.MissionSpec(my_mission.get_mission_xml(params), True)
         my_mission.load_duo_mission(mission, agents)
         shoot_agent.reset()
@@ -238,13 +238,19 @@ FileIO.save_data("dataset",data_set)
 if graphing:
     Graphing.FitData(mission_accuracies)
     Graphing.HitRateGraph()
-    Graphing.FitData(data_set.hori_leading)
-    Graphing.PredictionGraph([10,None,0], "Horizontal Aim Compensation", "x_velocity", "Degrees adjusted")
+
     Graphing.FitData(data_set.hori_shots)
-    Graphing.RegressionLine()
+    Graphing.PredictionGraph([None], "Horizontal Target Aiming", "Relative angle", "Relative change")
+
+    Graphing.FitData(data_set.hori_leading)
+    Graphing.PredictionGraph([20, None, 0], "Horizontal Aim Compensation", "x_velocity", "Degrees adjusted")
+
     Graphing.FitData(data_set.vert_shots)
+    Graphing.PredictionGraph([None, None], "Vertical Target Aiming", "Distance", "Elevation")
+
+    Graphing.FitData(data_set.vert_leading)
+    Graphing.PredictionGraph([20, 0, None], "Vertical Aim Compensation", "y_velocity", "Degrees adjusted")
+
     Graphing.FitErrors(shoot_agent.vert_errors, shoot_agent.hori_errors)
-    Graphing.DataGraph()
-    Graphing.PredictionGraph([None, None], "Angle prediction", "Distance", "Elevation")
     Graphing.ErrorGraph()
     Graphing.AccuracyGraph()

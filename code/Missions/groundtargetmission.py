@@ -38,11 +38,11 @@ class GroundTargetMission(Mission):
               </ServerInitialConditions>
                 <ServerHandlers>
                   <FlatWorldGenerator></FlatWorldGenerator>
-                  <ServerQuitFromTimeUp timeLimitMs="5000"/>
+                  <ServerQuitFromTimeUp timeLimitMs="15000"/>
                 </ServerHandlers>
               </ServerSection>
 
-              <AgentSection mode="Survival">
+              <AgentSection mode="Creative">
                 <Name>Slayer</Name>
                 <AgentStart>
                     <Placement x="0.5" y="4" z="0.5" yaw="0"/>

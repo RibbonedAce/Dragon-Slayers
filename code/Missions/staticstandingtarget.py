@@ -27,7 +27,7 @@ class StaticStandingTargetMission(Mission):
               </ServerInitialConditions>
                 <ServerHandlers>
                   <FlatWorldGenerator></FlatWorldGenerator>
-                  <ServerQuitFromTimeUp timeLimitMs="60000"/>
+                  <ServerQuitFromTimeUp timeLimitMs="30000"/>
                 </ServerHandlers>
               </ServerSection>
 
@@ -51,7 +51,7 @@ class StaticStandingTargetMission(Mission):
                 </AgentHandlers>
               </AgentSection>
               
-              <AgentSection mode="Creative">
+              <AgentSection mode="Survival">
                 <Name>Mover</Name>
                 <AgentStart>
                     <Placement x="'''+str(params[0])+'''" y="4" z="'''+str(params[1])+'''" yaw="'''+str(angle)+'''"/>
