@@ -51,7 +51,7 @@ class StaticStandingTargetMission(Mission):
                 </AgentHandlers>
               </AgentSection>
               
-              <AgentSection mode="Survival">
+              <AgentSection mode="Creative">
                 <Name>Mover</Name>
                 <AgentStart>
                     <Placement x="'''+str(params[0])+'''" y="4" z="'''+str(params[1])+'''" yaw="'''+str(angle)+'''"/>

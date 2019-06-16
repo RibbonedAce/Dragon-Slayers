@@ -127,7 +127,7 @@ def get_closest_point(curve, target):
     Target is a list of points that define the target location.
     Returns the 2 closest points on the list of segments at a given time.
     ''' 
-    
+
     if len(curve) == 0 or len(target) == 0:
         return None
 
@@ -180,7 +180,6 @@ class ArrowTracker():
         previous position.
         '''
         arrow = find_entity_by_id(obs["Mobs"], self.arrow_id)
-        self.target_data.append((np.asarray([target_transform["x"], target_transform["y"], target_transform["z"]]), obs["time"]))
         #if arrow found
         if arrow:
             #get arrow location
@@ -189,6 +188,7 @@ class ArrowTracker():
             #avoid appending duplicate adjacent data
             
             if len(self.arrow_data) == 0 or not np.array_equal(arrow_vec,self.arrow_data[-1][0]):
+                self.target_data.append((np.asarray([target_transform["x"], target_transform["y"], target_transform["z"]]), obs["time"]))
                 self.arrow_data.append((arrow_vec, obs["time"]))
         return None
 
