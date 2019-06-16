@@ -4,7 +4,7 @@ title:  Final Report
 ---
 
 ## Video
-<iframe width="560" height="315" src="https://www.youtube.com/embed/K5Zn3xCUkDA" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
+<iframe width="560" height="315" src="https://www.youtube.com/embed/fhauQzM92Cc" frameborder="0" allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe>
 
 ## Project Summary
 The goal of our project is to teach an agent to aim and shoot at enemies with a bow. Because arrows take time to travel and are affected by gravity, successfully hitting targets is not a trivial task. The agent will need to learn to aim higher for airborne or distant targets. Targets can also move in any direction and the agent must become capable of compensating for the target's velocity when aiming. The map will be a flat world with no obstacles that would affect aiming. One additional requirement our team decided on was that the agent should not require any human intervention when training. If the agent were to be dropped into an environment with no knowledge, it should be capable of learning how to hit any target to the best of its ability. Because our team is using a linear regression model, this means that all data points must be collected by the agent and that it must be able to begin with an empty data set.
@@ -32,6 +32,9 @@ The method our team used to gather data is to use every point along each arrow t
 <p align="center">
     <img src="images/DirectVerticalAimDiagram.png"  height="250">
 </p>
+
+> Polynomial Features (degree=3): ['1', 'x', 'y', 'x^2', 'x y', 'y^2', 'x^3', 'x^2 y', 'x y^2', 'y^3']
+
 For vertical aiming, our agent uses regression with using the features of distance from the target and difference in elevation from the target (if the target is higher than the shooter, the elevation is positive). The linear regression model takes polynomial combinations of these features as input. The output of this regression is the vertical angle needed to aim to hit a target at the given distance and elevation. The following equation is the regression equation our agent currently uses to aim vertically:<br><br>
 $$angle = a + b*distance + c*elevation + d*distance^2 + e*distance*elevation + f*elevation^2$$<br><br>
 Before our agent uses this regression equation, it shoots arrows at multiple angles steadily proceeding upward to ensure a spread of data points are available when it starts using regression. A figure below shows how data is stored and how the agent calculates predictions over many distances and elevations. The prediction graph uses the regression equation that is $$angle \approx 13.6 + -0.57*distance + 2.3*elevation + 0.006*distance^2 - 0.012*distance*elevation - 0.013*elevation^2$$.
@@ -41,8 +44,11 @@ Before our agent uses this regression equation, it shoots arrows at multiple ang
 
 #### Horizontal Aiming
 <p align="center">
-    <img src="images/DirectHorizontalAimDiagram.png" height="250">
+    <img src="images/DirectHorizontalAimDiagram.png" height="250"><img src="images/RegressionStaticHorizontal.png" height="250">
 </p>
+
+> Polynomial Features (degree=1): ['1', 'x']
+
 For horizontal aiming, our agent uses regression with only one feature: the angle between the player's current facing direction and the target's position. The output of the regression model is how many degrees the player must turn to face the target. This is distinct from the vertical aiming model because the output is relative to the player's current facing direction. This makes the data points more general and applicable in more situations. As an example, turning from 45 degrees to 30 degrees (a difference of 15) is treated the same as turning from 20 degrees to 5 degrees. Against stationary targets, no other factors are necessary because there are no environmental forces that will curve arrows horizontally in flight. The following equation is the regression equation our agent currently uses to aim horizontally:<br><br>
 $$angle = a + b*hori_angle$$<br><br>
 Before our agent uses this regression equation, it takes a few randomly decided shots so it will build a spread of data points before utilizing the regression model. However, because the aiming angle matches with the relative angle of the target, this regression is trivial and very few points of data are needed to get good predictions. Because the aiming here is so trivial, figures are not necessary to show as the regression equation will converge to $$angle = 0 + 1*hori_angle$$.
@@ -67,19 +73,40 @@ The way our team solved this problem was by rethinking how aim is represented. B
 <p align="center">
     <img src="images/HorizontalCompensationDiagram.png" height="250">
 </p>
-With direct and leading angles separated, the problem of compensating for target velocity becomes simpler. The leading model assumes that the agent is facing the target's position at the time of aim caculation. The amount that aiming is affected is then dependent on distance, X velocity, and Z velocity. The agent keeps track of how far the target has moved from when the arrow was released. At each point in time, the target has moved some distance.  
+
+> Polynomial Combinations (degree=2): ['1', 'x', 'y', 'z', 'x^2', 'x y', 'x z', 'y^2', 'y z', 'z^2']
+
+With direct and leading angles separated, the problem of compensating for target velocity becomes simpler. The leading model assumes that the agent is facing the target's position at the time of aim caculation. The input features of the linear regression model are distance, X-velocity, and Z-velocity. The linear regression model takes polynomial combinations of these features as input. The output is the Δ yaw angle that represents how much of an angular offset is needed to hit the moving target. The agent keeps track of how far the target has moved from when the arrow was released. At each point in time, the target has moved some distance.  
 <p align="center">
     <img src="images/MovingDataCollectionDiagram.png" height="250">
 </p>
+
 As the diagram above demonstrates, the distance that the target has moved can be applied to each arrow position, giving the agent knowledge of how to shoot targets that begin at the arrow's current position and move in the same manner. Just like with training against static targets, dozens of data points can be harvested per shot, decreasing training time drastically. 
 
 #### Vertical Aiming
 <p align="center">
     <img src="images/VerticalCompensationDiagram.png" height="250">
 </p>
-Leading targets moving vertically is done in a similar manner to leading targets moving horizontally. The offset of the target at each point in time is applied to each arrow position along the trajectory. The main difference is that, due to gravity, a straight line to the red point can't be used. Instead, the output is the difference between the pitch of the current shot and the predicted angle necessary to hit the red point. This may seem like a minor difference, but this does make vertical aiming compensation less reliable than horizontal aiming compensation because the predicted Δ angle for leading is dependent on a predicted direct aim angle. That is, the regression model takes in the output of another, possibly imperfect, regression model. Any poor performance of the direct aim regression model will negatively influence the leading aim regression model.
+
+> Polynomial Combinations (degree=3): ['1', 'w', 'x', 'y', 'z', 'w^2', 'w x', 'w y', 'w z', 'x^2', 'x y', 'x z', 'y^2', 'y z', 'z^2', 'w^3', 'w^2 x', 'w^2 y', 'w^2 z', 'w x^2', 'w x y', 'w x z', 'w y^2', 'w y z', 'w z^2', 'x^3', 'x^2 y', 'x^2 z', 'x y^2', 'x y z', 'x z^2', 'y^3', 'y^2 z', 'y z^2', 'z^3']
+
+Leading targets moving vertically is done in a similar manner to leading targets moving horizontally. The input features of the linear regression model are distance, elevation, Y-velocity, and Z-velocity. The linear regression model takes polynomial combinations of these features as input. The output is the Δ pitch angle that represents how much of an angular offset is needed to hit the moving target. 
+
+The offset of the target at each point in time is applied to each arrow position along the trajectory. The main difference is that, due to gravity, a straight line to the red point can't be used. Instead, the output is the difference between the pitch of the current shot and the predicted angle necessary to hit the red point. This may seem like a minor difference, but this does make vertical aiming compensation less reliable than horizontal aiming compensation because the predicted Δ angle for leading is dependent on a predicted direct aim angle. That is, the regression model takes in the output of another, possibly imperfect, regression model. Any poor performance of the direct aim regression model will negatively influence the leading aim regression model.
 
 ## Evaluation
+### Hit Percentage
+Hit percentage is, by far, the most important metric for our AI. A successful AI, in our eyes, is an AI that can reliably hit targets. We wish to maximize the agent's accuracy, pushing it as close to 100% as possible. The graph below displays the accuracy per mission, on a scale from 0% to 100%. Accuracy is defined as the number of shots that hit divided by the total number of shots taken. Missions last for 60 seconds before restarting. The target's position is randomized between missions, with distances ranging from 10 to 50 blocks away from the agent. 
+#### Static Targets
+Put Floating target mission accuracy graph here
+Put total accuracy here
+This is the agent's accuracy against a non-moving static target that is in the air. There is a clear upward trend as the agent rapidly learns how to aim at targets that do not move. It is very simple to generate an optimal regression curve when velocity is not a factor in aiming. This perfect accuracy means that the linear regression model has accurately modeled the physics of the world and is able to predict how high the agent needs to aim to hit targets in the air or at distance.
+#### Moving Targets
+Put ground target mission accuracy graph here
+Put total accuracy here
+This is the agent's accuracy against moving targets on the ground. There is an upward trend as the agent learns to hit moving targets, but it doesn't hit as many shots as we would like it to. While the AI is capable of leading moving targets, it does so inconsistently. Still, this is better performance than an AI that does not attempt to adjust for target movement. The AI has made a great deal of progress to reach the performance it has, but it is far from optimal. It is possible that the agent is experiencing overfitting, which is preventing it from accurately leading targets in unknown situations. 
+### Regression Curves
+
 
 ## References
 - [Matplotlib](https://matplotlib.org/)
