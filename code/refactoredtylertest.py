@@ -11,6 +11,7 @@ import json
 import random
 import math
 import numpy as np
+from matplotlib import pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
 from Missions.staticflyingtarget import StaticFlyingTargetMission
@@ -20,6 +21,7 @@ from Missions.enemymission import EnemyMission
 from Missions.groundtargetmission import GroundTargetMission
 from Missions.staticstandingtarget import StaticStandingTargetMission
 from Missions.floatingtargetmission import FloatingTargetMission
+from Missions.dragonmission import DragonMission
 from malmo_agent import MalmoAgent
 from graphing import Graphing
 from fileio import FileIO
@@ -147,6 +149,8 @@ elif mission_type.lower() == "staticstandingmission":
     my_mission = StaticStandingTargetMission()
 elif mission_type.lower() == "floatingtargetmission":
     my_mission = FloatingTargetMission()
+elif mission_type.lower() == "dragonmission":
+    my_mission = DragonMission()
 
 agents = my_mission.two_agent_init()
 iterations = 20
@@ -157,11 +161,11 @@ hori_step_size = 0.5
 data_set = FileIO.get_data_set()
 shoot_agent = MalmoAgent("Slayer",agents[0],0,0,vert_step_size,hori_step_size, data_set)
 move_agent = MalmoAgent("Mover",agents[1],0,0,vert_step_size,hori_step_size, data_set)
-
+mission_accuracies = []
 try:
     for i in range(iterations):
         time.sleep(1)
-        params = (random.randint(30, 50)*random.randrange(-1, 2, 2), random.randint(30, 50)*random.randrange(-1, 2, 2), random.randint(10, 20))
+        params = (random.randint(10, 20)*random.randrange(-1, 2, 2), random.randint(10, 20)*random.randrange(-1, 2, 2), random.randint(10, 20))
         mission = MalmoPython.MissionSpec(my_mission.get_mission_xml(params), True)
         my_mission.load_duo_mission(mission, agents)
         shoot_agent.reset()
@@ -217,6 +221,12 @@ try:
             
         print()
         print("Mission ended")
+        if shoot_agent.total_shots > 0:
+            print("Mission Accuracy: {}/{} -- {}".format(shoot_agent.mission_hits,shoot_agent.mission_shots,(shoot_agent.mission_hits*1.0/shoot_agent.mission_shots)))
+            print("Total Accuracy: {}/{} -- {}".format(shoot_agent.total_hits,shoot_agent.total_shots,(shoot_agent.total_hits*1.0/shoot_agent.total_shots)))
+            mission_accuracies.append(shoot_agent.mission_hits*1.0/shoot_agent.mission_shots)
+        else:
+            mission_accuracies.append(0)
             # Mission has ended.
 except KeyboardInterrupt:
     shoot_agent.agent.sendCommand("quit")
@@ -226,10 +236,12 @@ except KeyboardInterrupt:
 FileIO.save_data("dataset",data_set)
 # Graph results
 if graphing:
+    Graphing.FitData(mission_accuracies)
+    Graphing.HitRateGraph()
     Graphing.FitData(data_set.hori_leading)
     Graphing.PredictionGraph([10,None,0], "Horizontal Aim Compensation", "x_velocity", "Degrees adjusted")
     Graphing.FitData(data_set.hori_shots)
-
+    Graphing.RegressionLine()
     Graphing.FitData(data_set.vert_shots)
     Graphing.FitErrors(shoot_agent.vert_errors, shoot_agent.hori_errors)
     Graphing.DataGraph()

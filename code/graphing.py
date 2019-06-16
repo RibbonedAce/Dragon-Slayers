@@ -2,6 +2,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from sklearn.linear_model import LinearRegression
 from sklearn.preprocessing import PolynomialFeatures
+from matplotlib.ticker import MaxNLocator
 
 def MaxMinExtend(data, extension=0.5):
     # Return the min and max of data, but stretched by extension*range
@@ -164,10 +165,26 @@ class Graphing:
         yy = np.zeros(100)
         for i in range(len(xx)):
             yy[i] = predictor.predict(poly.transform([[xx[i]]]))[0]
-        plt.plot(xx, yy, color='blue',linewidth=2,label="Predicted delta angle")
-        plt.plot(xx,xx, color='green',label="y=x")
+        plt.plot(xx,xx, color=(0,0,0,.5),linewidth=7,label="y=x")
+        plt.plot(xx, yy, color='red',linestyle='dashed',linewidth=7, label="Predicted delta angle")
         plt.legend()
         plt.title("Horizontal Angle Regression Predictions")
         plt.xlabel("Delta horizontal angle")
         plt.ylabel("Predicted delta angle")
         plt.show()
+
+    def HitRateGraph():
+        if Graphing.array is None or len(Graphing.array) == 0:
+            print("Hit Rate Graph failed because no data was given.")
+            return None
+        ax = plt.figure().gca()
+        ax.plot(range(len(Graphing.array)), Graphing.array*100, color='blue', label='Hit Percentage')
+        ax.legend()
+        ax.set_ylim([0,100])
+        plt.title("Accuracy per mission")
+        ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+
+        plt.xlabel("Mission Number")
+        plt.ylabel("Percent")
+        plt.show()
+

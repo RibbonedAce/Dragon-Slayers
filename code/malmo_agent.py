@@ -230,6 +230,9 @@ class MalmoAgent():
         #self.hori_train_state = STATIC if len(self.data_set.hori_shots) < 500 else MOVING
         self.hori_train_state = MOVING
         self.vert_train_state = STATIC #I don't have solid values for this yet
+        self.total_shots = 0
+        self.total_hits = 0
+        
 
     def reset_shoot_loop(self):
         self.min_aim_duration = 20
@@ -247,7 +250,9 @@ class MalmoAgent():
         self.stored_data = []
         self.current_data = []
         #Scales turning speed
-        self.turn_speed_multiplier = (1/360)* 2        
+        self.turn_speed_multiplier = (1/360)* 2   
+        self.mission_shots = 0
+        self.mission_hits = 0     
 
     def step(self, obs):
         #Run this once a tick
@@ -422,8 +427,14 @@ class MalmoAgent():
         vert_error = 0
         hori_error = 0
         
-        target_hit = self.record_shot(target_transform,data,target_data,obs,aim_data)
-      
+        bounced_off = self.record_shot(target_transform,data,target_data,obs,aim_data)
+        self.total_shots += 1
+        self.mission_shots += 1
+        if bounced_off:
+            #record shot checks for arrows that bounce off
+            self.total_hits += 1
+            self.mission_hits += 1
+        
         #Append errors depending on how close the arrow got
         #print(self.data_set.vert_shots[-1])
         closest_point, target_loc = get_closest_point(data, target_data)
@@ -474,7 +485,7 @@ class MalmoAgent():
                     reverse_ticks += 1
 
                 #Break if bounced off target
-                if reverse_ticks >= 2:
+                if reverse_ticks >= 4:
                     self.data_set.vert_shots.pop(-1)
                     self.data_set.hori_shots.pop(-1)
                     if self.vert_train_state == MOVING:
@@ -496,7 +507,7 @@ class MalmoAgent():
                 #Update previous position
                 last_distance_from_player = current_distance_from_player
         #An arrow hits the target if it has moved backward for more than 2 ticks
-        return reverse_ticks > 2
+        return reverse_ticks >= 4
 
     def reset(self):
         #Reset the time for commands
