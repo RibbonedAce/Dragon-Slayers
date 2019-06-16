@@ -63,7 +63,7 @@ class Graphing:
         plt.ylabel("Distance")
         plt.show()
 
-    def PredictionGraph(defaults, title="", xlabel="", ylabel=""):
+    def PredictionGraph(defaults, degrees=2, signed=True, title="", xlabel="", ylabel=""):
         assert not Graphing.array is None, "Need to fit data points; use Graphing.FitData"
         assert len(defaults) + 1 == len(Graphing.array[0]), "Default values list must be same shape as samples"
         assert None in defaults, "Need exactly 1 or 2 non-default values in samples"
@@ -76,8 +76,11 @@ class Graphing:
                 indices.append(i)
         assert len(indices) < 3, "Need exactly 1 or 2 non-default values in samples"
         
-        poly = PolynomialFeatures(2, include_bias=False).fit(Graphing.array[:,:-1])
-        predictor = LinearRegression().fit(signed_quadratic_features(poly.transform(Graphing.array[:,:-1]), len(defaults)), Graphing.array[:,-1])
+        poly = PolynomialFeatures(degrees, include_bias=False).fit(Graphing.array[:,:-1])
+        if signed:
+            predictor = LinearRegression().fit(signed_quadratic_features(poly.transform(Graphing.array[:,:-1]), len(defaults)), Graphing.array[:,-1])
+        else:
+            predictor = LinearRegression().fit(poly.transform(Graphing.array[:,:-1]), Graphing.array[:,-1])
 
         # If only 1 data point to graph, use line graph
         if len(indices) == 1:
@@ -87,7 +90,10 @@ class Graphing:
             for i in range(xx.shape[0]):
                 predictData = defaults
                 predictData[indices[0]] = xx[i]
-                yy[i] = predictor.predict(signed_quadratic_features(poly.transform([predictData]), len(defaults)))[0]
+                if signed:
+                    yy[i] = predictor.predict(signed_quadratic_features(poly.transform([predictData]), len(defaults)))[0]
+                else:
+                    yy[i] = predictor.predict(poly.transform([predictData]))[0]
             cs = plt.plot(xx, yy)
 
         # If 2 data ponits to graph, use topological graph    
@@ -103,11 +109,17 @@ class Graphing:
                     predictData = defaults
                     predictData[indices[0]] = xx[i,j]
                     predictData[indices[1]] = yy[i,j]
-                    zz[i][j] = predictor.predict(poly.transform([predictData]))[0]
+                    if signed:
+                        zz[i][j] = predictor.predict(signed_quadratic_features(poly.transform([predictData])))[0]
+                    else:
+                        zz[i][j] = predictor.predict(poly.transform([predictData]))[0]
             zz.reshape(xx.shape)
             cSpace = np.linspace(min(Graphing.array[:,-1]), max(Graphing.array[:,-1]), 10)
             cs = plt.contourf(xx, yy, zz, levels=cSpace)
             cbar = plt.colorbar(cs)
+
+        # Print model
+        print(predictor.coef_, predictor.intercept_)
 
         # Plot details
         plt.title(title)
