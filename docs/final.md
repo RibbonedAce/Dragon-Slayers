@@ -30,7 +30,7 @@ The switching between shooting and collecting data is done in a loop. The basic 
 ```python
 def loop():
     while True:
-        # Either aim and hoot or measure arrow trajectory
+        # Either aim and shoot or measure arrow trajectory
         # Wait one tick in time to get new observations
 ```
 There are some other modifications to this loop to speed up training, but this general process is the key to getting data points.
